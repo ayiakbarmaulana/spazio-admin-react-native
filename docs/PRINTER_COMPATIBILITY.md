@@ -37,9 +37,13 @@ Prasyarat di HP kasir:
 1. **Printer harus dipasangkan (paired) dulu** di Pengaturan Bluetooth Android.
    Aplikasi ini tidak memasangkan printer; kalau pairing gagal di level
    Android, aplikasi tidak bisa menolong.
-2. Izin `BLUETOOTH_CONNECT` / `BLUETOOTH_SCAN` diberikan saat sistem meminta
-   (Android 12 ke atas). Menolaknya membuat pemindaian gagal dengan
-   `BLUETOOTH_PERMISSION_DENIED`.
+2. Izin `BLUETOOTH_CONNECT` / `BLUETOOTH_SCAN` **diminta aplikasi saat
+   menjalankan Uji Koneksi atau mencetak** (Android 12 ke atas). Aplikasi
+   memanggil `PermissionsAndroid.requestMultiple` lewat
+   `src/printing/bluetoothPermissions.ts` sebelum menyentuh adaptor, karena
+   `react-native-ble-plx` tidak meminta izin sendiri. Kalau ditolak, hasilnya
+   `BLUETOOTH_PERMISSION_DENIED`; kalau ditolak permanen, pesannya mengarahkan
+   ke **Pengaturan → Aplikasi → Spazio → Izin**.
 3. Isi **Nama perangkat** atau **Alamat perangkat** di form printer untuk
    mempercepat pemilihan. Dikosongkan juga boleh: driver akan memilih perangkat
    terpasang yang namanya cocok dengan pola nama printer umum.

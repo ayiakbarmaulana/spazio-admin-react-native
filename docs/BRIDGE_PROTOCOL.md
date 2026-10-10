@@ -118,7 +118,12 @@ dibajak tidak bisa memetakan jaringan internal dari dalam aplikasi.
 `printerId` hanya **menunjuk** printer mana yang dipakai. Alamat yang benar-
 benar dihubungi dibaca dari konfigurasi lokal.
 
-Kalau `printerId` tidak ada, respons `NO_PRINTER` — native tidak menebak.
+`printerId` **opsional — dan PWA memang tidak mengirimnya.** Web tidak tahu apa
+pun soal printer (host/port tidak pernah bocor ke WebView). Kalau kosong, native
+memilih printer aktif pertama yang melayani `destination` itu.
+
+Respons `NO_PRINTER` hanya muncul kalau **tidak ada** printer aktif untuk tujuan
+itu — bukan sekadar karena `printerId` tidak dikirim.
 
 Respons sukses:
 ```json
@@ -153,7 +158,7 @@ Kode error: `INVALID_PAYLOAD`, `JOB_NOT_FOUND`, `JOB_NOT_CANCELLABLE`.
 | --- | --- |
 | `INVALID_REQUEST` | Pesan tidak bisa diurai, atau `requestId` kosong |
 | `INVALID_PAYLOAD` | Bentuk payload tidak sesuai kontrak |
-| `NO_PRINTER` | Tidak ada `printerId` yang diberikan |
+| `NO_PRINTER` | Tidak ada printer aktif untuk tujuan yang diminta |
 
 Kode error **cetak** (`CONNECTION_REFUSED`, `CONNECTION_TIMEOUT`, dst.) tidak
 muncul sebagai respons `PRINT_REQUEST`. Respons itu dikirim sebelum transmisi

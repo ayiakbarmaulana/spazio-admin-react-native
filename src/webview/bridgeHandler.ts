@@ -20,6 +20,10 @@ export type BridgeDeps = {
   dispatcher: PrintDispatcher;
   repo: PrintJobRepository;
   listPrinters: () => Promise<PrinterConfig[]>;
+  /** Printer aktif untuk sebuah tujuan. Dipakai kalau PWA tidak mengirim id. */
+  findPrinterForDestination: (
+    destination: PrinterConfig['destinations'][number],
+  ) => Promise<PrinterConfig | null>;
   platform: string;
   appVersion: string;
   onJobStatusSubscribe: (
@@ -82,7 +86,7 @@ export class BridgeHandler {
       case 'GET_PRINTERS':
         return okResponse(request.requestId, await this.printerSummary());
       case 'PRINT_REQUEST':
-        return this.handlePrint(request);
+        return await this.handlePrint(request);
       case 'CANCEL_PRINT_JOB':
         return this.handleCancel(request);
       case 'SUBSCRIBE_JOB_STATUS': {
@@ -123,7 +127,7 @@ export class BridgeHandler {
    * Cetak. Job dipersist SEBELUM respons dikirim, jadi WebView boleh
    * memperlakukan ack sebagai "sudah tercatat", bukan "sudah tercetak".
    */
-  private handlePrint(request: BridgeRequest): BridgeResponse {
+  private async handlePrint(request: BridgeRequest): Promise<BridgeResponse> {
     const validation = validatePrintRequest(request.payload);
     if (!validation.ok) {
       return errorResponse(
@@ -135,8 +139,12 @@ export class BridgeHandler {
 
     const payload: PrintRequestPayload = validation.value;
     // printerId dari WebView hanya boleh MENUNJUK printer mana; host/port tetap
-    // dari konfigurasi lokal. Kalau kosong, tidak ada yang bisa dipilih.
-    const printerId = payload.printerId;
+    // dari konfigurasi lokal. PWA memang tidak mengirimnya (tidak tahu printer),
+    // jadi kalau kosong native yang memilih printer aktif pertama untuk tujuan
+    // itu — bukan menolak. Host/port tidak pernah sampai ke WebView.
+    const printerId =
+      payload.printerId ??
+      (await this.deps.findPrinterForDestination(payload.destination))?.id;
     if (!printerId) {
       return errorResponse(
         request.requestId,

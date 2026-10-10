@@ -75,6 +75,7 @@ export function AppServicesProvider({
       dispatcher,
       repo,
       listPrinters,
+      findPrinterForDestination,
       platform: Platform.OS,
       appVersion: APP_VERSION,
       onJobStatusSubscribe: () => {

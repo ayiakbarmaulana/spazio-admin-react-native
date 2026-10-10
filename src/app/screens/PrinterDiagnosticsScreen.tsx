@@ -10,6 +10,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { getPrinter } from '../../printing/PrinterStore';
 import { BlePrinterDriver } from '../../printing/BlePrinterDriver';
+import { ensureBluetoothPermission } from '../../printing/bluetoothPermissions';
 import { LanPrinterDriver } from '../../printing/LanPrinterDriver';
 import type { PrinterTransport } from '../../printing/PrinterTransport';
 import { buildReceipt } from '../../printing/ReceiptTemplate';
@@ -90,6 +91,24 @@ export function PrinterDiagnosticsScreen() {
 
     setTesting(true);
     setOutcome(null);
+
+    if (printer.connectionType === 'bluetooth') {
+      const permission = await ensureBluetoothPermission();
+      if (!permission.ok) {
+        setOutcome({
+          connected: false,
+          transmitted: false,
+          error: {
+            code: 'BLUETOOTH_PERMISSION_DENIED',
+            message: permission.message,
+            transmissionStarted: false,
+            at: new Date().toISOString(),
+          },
+        });
+        setTesting(false);
+        return;
+      }
+    }
 
     const driver: PrinterTransport =
       printer.connectionType === 'bluetooth'

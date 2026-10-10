@@ -69,6 +69,9 @@ function setup(printers: PrinterConfig[] = [printer]) {
     }),
     repo,
     listPrinters: async () => printers,
+    findPrinterForDestination: async destination =>
+      printers.find(p => p.enabled && p.destinations.includes(destination)) ??
+      null,
     platform: 'android',
     appVersion: '0.0.1',
     onJobStatusSubscribe: (requestId, jobIds) =>
@@ -149,8 +152,43 @@ it('orderId berbeda dengan requestId berbeda menghasilkan dua job', async () => 
   expect(repo.findRecent()).toHaveLength(2);
 });
 
-it('PRINT_REQUEST tanpa printerId ditolak dengan NO_PRINTER', async () => {
+it('PRINT_REQUEST tanpa printerId memakai printer aktif untuk tujuan itu', async () => {
+  // PWA memang TIDAK mengirim printerId — native yang memilih. Ini kontrak,
+  // bukan kelonggaran: web tidak boleh tahu printer mana yang dipakai.
   const { handler, repo } = setup();
+
+  const response = await handler.handle(
+    request('PRINT_REQUEST', 'r1', {
+      orderId: 'ord-1',
+      destination: 'customer_receipt',
+      order,
+    }),
+  );
+
+  expect(response.ok).toBe(true);
+  expect(repo.findRecent()).toHaveLength(1);
+});
+
+it('PRINT_REQUEST tanpa printerId ditolak NO_PRINTER kalau tak ada printer untuk tujuan itu', async () => {
+  const { handler, repo } = setup([
+    { ...printer, destinations: ['kitchen_ticket'] },
+  ]);
+
+  const response = await handler.handle(
+    request('PRINT_REQUEST', 'r1', {
+      orderId: 'ord-1',
+      destination: 'customer_receipt',
+      order,
+    }),
+  );
+
+  expect(response.ok).toBe(false);
+  expect(response.error?.code).toBe('NO_PRINTER');
+  expect(repo.findRecent()).toHaveLength(0);
+});
+
+it('PRINT_REQUEST tanpa printerId mengabaikan printer nonaktif', async () => {
+  const { handler, repo } = setup([{ ...printer, enabled: false }]);
 
   const response = await handler.handle(
     request('PRINT_REQUEST', 'r1', {

@@ -96,6 +96,12 @@ export type PrintErrorCode =
   | 'DEVICE_DISCONNECTED'
   /** Terhubung, tapi tidak ada karakteristik tulis — printer tidak kompatibel. */
   | 'CHARACTERISTIC_NOT_FOUND'
+  /**
+   * Modul native BLE tidak ada di APK yang sedang berjalan. Terjadi kalau APK
+   * dibangun sebelum `react-native-ble-plx` terpasang, atau instalasi rusak.
+   * Tidak bisa diperbaiki dari aplikasi — wajib pasang ulang APK.
+   */
+  | 'PRINTING_MODULE_MISSING'
   | 'UNKNOWN_TRANSPORT_ERROR';
 
 export type PrintJobError = {

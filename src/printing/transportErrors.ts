@@ -13,11 +13,18 @@ const PATTERNS: [RegExp, PrintErrorCode][] = [
   // ── BLE / Bluetooth ────────────────────────────────────────────────────
   // Ditaruh di depan: pesan BLE sering ikut memuat kata "timeout"/"denied" dan
   // akan salah klasifikasi kalau pola jaringan dicek lebih dulu.
+  //
+  // Paling depan: modul native tidak terdaftar di APK. Gejalanya adalah
+  // `NativeModules.BlePlx` bernilai null, lalu `BleManager` melempar
+  // "Cannot read property 'createClient' of null". Tidak ada izin/yang bisa
+  // memperbaikinya — APK harus dipasang ulang.
+  [/createclient|bleplx|of null/i, 'PRINTING_MODULE_MISSING'],
+  [/not authorized to use bluetooth|bluetoothunauthorized/i, 'BLUETOOTH_PERMISSION_DENIED'],
   [/bluetooth.*(off|disabled|not (available|powered))|no bluetooth adapter/i, 'BLUETOOTH_DISABLED'],
   [/BLUETOOTH_(CONNECT|SCAN)|bluetooth.*permission|permission.*bluetooth/i, 'BLUETOOTH_PERMISSION_DENIED'],
   [/characteristic.*not found|no writable char|service.*not found/i, 'CHARACTERISTIC_NOT_FOUND'],
   [/device.*(not found|disappeared)|not in range|adapter is off/i, 'DEVICE_NOT_FOUND'],
-  [/disconnect/, 'DEVICE_DISCONNECTED'],
+  [/disconnect|connection failed/i, 'DEVICE_DISCONNECTED'],
   // ── Jaringan ───────────────────────────────────────────────────────────
   [/ECONNREFUSED|connection refused|refused/i, 'CONNECTION_REFUSED'],
   [/ETIMEDOUT|timeout|timed out/i, 'CONNECTION_TIMEOUT'],

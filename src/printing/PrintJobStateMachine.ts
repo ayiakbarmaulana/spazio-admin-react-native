@@ -99,6 +99,9 @@ const ERROR_MESSAGES: Record<PrintErrorCode, string> = {
   CHARACTERISTIC_NOT_FOUND:
     'Printer ini tidak menerima data cetak (karakteristik BLE tidak cocok). ' +
     'Coba printer lain atau gunakan koneksi LAN.',
+  PRINTING_MODULE_MISSING:
+    'Aplikasi ini tidak memuat modul Bluetooth. Pasang ulang (install ulang) ' +
+    'aplikasi versi terbaru, lalu coba lagi.',
   UNKNOWN_TRANSPORT_ERROR: 'Terjadi kesalahan cetak yang tidak dikenali.',
 };
 

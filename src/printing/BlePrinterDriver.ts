@@ -64,6 +64,9 @@ type BleManagerInstance = {
   ) => Promise<void>;
   stopDeviceScan: () => Promise<void>;
   connectToDevice: (deviceId: string) => Promise<BleDevice>;
+  discoverAllServicesAndCharacteristicsForDevice: (
+    deviceId: string,
+  ) => Promise<BleDevice>;
   cancelDeviceConnection: (deviceId: string) => Promise<BleDevice>;
   requestMTUForDevice: (deviceId: string, mtu: number) => Promise<BleDevice>;
   characteristicsForDevice: (
@@ -135,7 +138,16 @@ export class BlePrinterDriver implements PrinterTransport {
 
   private ble(): BleManagerInstance {
     if (!this.manager) {
-      this.manager = new (loadBleManager().BleManager)();
+      try {
+        this.manager = new (loadBleManager().BleManager)();
+      } catch (error) {
+        // Kasus paling umum: `NativeModules.BlePlx` null karena APK dibangun
+        // tanpa modul native ini. Pesan aslinya ("Cannot read property
+        // 'createClient' of null") tidak berarti apa-apa bagi kasir, jadi
+        // ditulis ulang. Klasifikasi akhirnya tetap lewat transportErrors.
+        const raw = error instanceof Error ? error.message : String(error);
+        throw new Error(`BleManager.createClient of null: ${raw}`);
+      }
     }
     return this.manager;
   }
@@ -238,6 +250,18 @@ export class BlePrinterDriver implements PrinterTransport {
       this.connectTimeoutMs,
     );
 
+    // WAJIB sebelum membaca karakteristik. `characteristicsForDevice` hanya
+    // membaca cache GATT; cache itu kosong sampai discovery dijalankan, jadi
+    // tanpa langkah ini hasilnya [] untuk SEMUA layanan dan driver berhenti
+    // dengan "no writable characteristic" padahal printernya normal.
+    // PWA tidak perlu ini karena `gatt.connect()` Web Bluetooth melakukan
+    // discovery implisit — di native Android tidak ada padanannya.
+    await this.withTimeout(
+      manager.discoverAllServicesAndCharacteristicsForDevice(deviceId),
+      'connect',
+      this.connectTimeoutMs,
+    );
+
     // Gagal requestMTU bukan error: potongan 20 byte tetap jalan, hanya lambat.
     await manager
       .requestMTUForDevice(deviceId, REQUESTED_MTU)
@@ -269,8 +293,16 @@ export class BlePrinterDriver implements PrinterTransport {
       let list: BleCharacteristic[];
       try {
         list = await manager.characteristicsForDevice(deviceId, serviceUUID);
-      } catch {
+      } catch (error) {
         // Layanan tidak ada di perangkat ini — lanjut ke kandidat berikutnya.
+        // Tapi hanya kalau memang "tidak ada". Error lain (koneksi putus,
+        // izin dicabut) HARUS naik: kalau ditelan, semuanya berakhir sebagai
+        // "karakteristik tidak ditemukan" dan penyebab aslinya hilang.
+        if (!/not found|no such|unknown|does not exist|service.*missing/i.test(
+          error instanceof Error ? error.message : String(error),
+        )) {
+          throw error;
+        }
         continue;
       }
 

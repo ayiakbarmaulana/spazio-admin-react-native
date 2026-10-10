@@ -24,6 +24,7 @@ import {
 } from '../types/printing';
 import { buildKitchenTicket } from './KitchenTicketTemplate';
 import { BlePrinterDriver } from './BlePrinterDriver';
+import { ensureBluetoothPermission } from './bluetoothPermissions';
 import { LanPrinterDriver } from './LanPrinterDriver';
 import { PrintJobRepository, type CreateJobInput } from './PrintJobRepository';
 import { statusForError } from './PrintJobStateMachine';
@@ -120,6 +121,19 @@ export class PrintDispatcher {
         'TRANSPORT_UNSUPPORTED',
         `Jenis koneksi "${printer.connectionType}" belum didukung.`,
       );
+    }
+
+    if (printer.connectionType === 'bluetooth') {
+      // Android 12+: izin runtime harus diberikan sebelum ble-plx menyentuh
+      // adaptor. Kalau ditolak, tidak ada gunanya mencoba menghubung.
+      const permission = await ensureBluetoothPermission();
+      if (!permission.ok) {
+        return this.fail(
+          job.id,
+          'BLUETOOTH_PERMISSION_DENIED',
+          permission.message,
+        );
+      }
     }
 
     let bytes: Uint8Array;

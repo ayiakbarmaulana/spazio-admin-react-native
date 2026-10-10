@@ -8,6 +8,8 @@ import {
 } from '../../src/printing/validatePrinterConfig';
 import { backoffDelay, nextAttemptAt } from '../../src/networking/backoff';
 import { classifyTransportError } from '../../src/printing/transportErrors';
+import { messageForError } from '../../src/printing/PrintJobStateMachine';
+import { classifyPermissionResult } from '../../src/printing/bluetoothPermissions';
 
 // ── Validasi alamat ─────────────────────────────────────────────────────────
 it('IPv4 sah diterima, termasuk hostname LAN sederhana', () => {
@@ -230,6 +232,97 @@ it('override UUID Bluetooth yang bentuknya salah ditolak', () => {
     bluetooth: { deviceId: 'AA:BB:CC:DD:EE:FF', serviceUuid: 'nope' },
   });
   expect(errors.some(e => /UUID Bluetooth/.test(e))).toBe(true);
+});
+
+it('modul native BLE hilang dikenali sebagai masalah instalasi, bukan error misterius', () => {
+  // Gejala nyata: APK dibangun sebelum react-native-ble-plx terpasang, jadi
+  // NativeModules.BlePlx null dan ble-plx melempar ini.
+  expect(
+    classifyTransportError(
+      new Error("Cannot read property 'createClient' of null"),
+    ),
+  ).toBe('PRINTING_MODULE_MISSING');
+  expect(
+    classifyTransportError(
+      new Error('BleManager.createClient of null: No native module BlePlx'),
+    ),
+  ).toBe('PRINTING_MODULE_MISSING');
+});
+
+it('izin Bluetooth yang ditolak dibedakan dari izin jaringan', () => {
+  expect(
+    classifyTransportError(
+      new Error('Device is not authorized to use BluetoothLE'),
+    ),
+  ).toBe('BLUETOOTH_PERMISSION_DENIED');
+});
+
+it('kegagalan koneksi perangkat jadi DEVICE_DISCONNECTED, bukan UNKNOWN', () => {
+  expect(
+    classifyTransportError(
+      new Error('Device AA:BB:CC:DD:EE:FF connection failed'),
+    ),
+  ).toBe('DEVICE_DISCONNECTED');
+});
+
+it('BLE yang tidak didukung perangkat tetap TRANSPORT_UNSUPPORTED', () => {
+  expect(
+    classifyTransportError(new Error('BluetoothLE is unsupported on this device')),
+  ).toBe('TRANSPORT_UNSUPPORTED');
+});
+
+it('setiap kode error punya pesan Indonesia — tidak ada kode yang bocor ke layar', () => {
+  const codes = [
+    'PRINTING_MODULE_MISSING',
+    'BLUETOOTH_PERMISSION_DENIED',
+    'DEVICE_DISCONNECTED',
+    'TRANSPORT_UNSUPPORTED',
+  ] as const;
+  for (const code of codes) {
+    expect(messageForError(code)).toMatch(/[a-z]/);
+    expect(messageForError(code)).not.toMatch(/UNKNOWN_TRANSPORT_ERROR/);
+  }
+});
+
+// ── classifyPermissionResult: izin runtime Bluetooth ────────────────────────
+it('izin Bluetooth: bukan Android atau Android < 12 selalu lolos', () => {
+  expect(classifyPermissionResult({ os: 'ios', apiLevel: 0 }).ok).toBe(true);
+  expect(classifyPermissionResult({ os: 'android', apiLevel: 30 }).ok).toBe(true);
+  // Tanpa results: Android 12+ tidak boleh dianggap lolos.
+  expect(classifyPermissionResult({ os: 'android', apiLevel: 34 }).ok).toBe(false);
+});
+
+it('izin Bluetooth: semuanya granted berarti lolos', () => {
+  const result = classifyPermissionResult({
+    os: 'android',
+    apiLevel: 33,
+    results: ['granted', 'granted'],
+  });
+  expect(result.ok).toBe(true);
+});
+
+it('izin Bluetooth: ditolak biasa vs ditolak permanen punya pesan berbeda', () => {
+  const denied = classifyPermissionResult({
+    os: 'android',
+    apiLevel: 33,
+    results: ['denied', 'denied'],
+  });
+  const blocked = classifyPermissionResult({
+    os: 'android',
+    apiLevel: 33,
+    results: ['granted', 'never_ask_again'],
+  });
+
+  expect(denied.ok).toBe(false);
+  expect(blocked.ok).toBe(false);
+  if (denied.ok || blocked.ok) {
+    throw new Error('tidak mungkin');
+  }
+  // Yang ditolak permanen harus mengarahkan ke Pengaturan; yang biasa cukup
+  // diminta ulang.
+  expect(blocked.message).toMatch(/Pengaturan/);
+  expect(denied.message).not.toMatch(/Pengaturan/);
+  expect(denied.message).toMatch(/coba lagi/);
 });
 
 // ── classifyTransportError: jalur Bluetooth ─────────────────────────────────

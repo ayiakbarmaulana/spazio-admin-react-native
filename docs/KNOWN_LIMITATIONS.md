@@ -30,6 +30,7 @@ Konsekuensi yang harus dihadapi:
 | Fitur | Alasan |
 | --- | --- |
 | BLE di luar profil ISSC | Driver mencoba ISSC Transparent UART lalu karakteristik tulis pertama; printer dengan handshake vendor khusus masih bisa gagal dengan `CHARACTERISTIC_NOT_FOUND` |
+| BLE tanpa izin runtime Android 12+ | Aplikasi meminta `BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT` lewat `src/printing/bluetoothPermissions.ts` saat Uji Koneksi atau mencetak. Kalau ditolak, `BLUETOOTH_PERMISSION_DENIED` |
 | USB / OTG | Butuh driver USB host dan negosiasi endpoint per model |
 | iOS | Belum ada jalur cetak; `ios/` masih dari template |
 | Barcode / QR di struk | Belum ada kebutuhan; sebagian printer murah mengabaikannya dengan cara yang sulit didiagnosis |
@@ -94,6 +95,34 @@ lama.
 Dalam praktiknya tidak akan terjadi: retry terjadi dalam hitungan detik, bukan
 setelah ratusan permintaan. Batas ini mencegah kebocoran memori pada aplikasi
 yang berjalan berhari-hari.
+
+## Modul native BLE bisa hilang dari APK
+
+Gejala: **Uji Koneksi** printer Bluetooth gagal dengan
+`Terjadi kesalahan cetak yang tidak dikenali.(Cannot read property
+'createClient' of null)`. Sudah diperbaiki di sisi pesan — sekarang muncul
+sebagai `PRINTING_MODULE_MISSING` dengan instruksi pasang ulang — tapi
+**penyebabnya bukan di kode JS**.
+
+Penyebabnya: APK yang sedang berjalan dibangun **sebelum
+`react-native-ble-plx` terpasang** (atau sebelum ada perubahan native lain).
+`NativeModules.BlePlx` bernilai null, lalu `react-native-ble-plx` memanggil
+`BleModule.createClient(...)` dan melempar `Cannot read property 'createClient'
+of null`.
+
+Perbaikannya bukan mengubah kode, melainkan membangun ulang:
+
+```
+cd android
+./gradlew clean
+cd ..
+npx react-native run-android
+```
+
+Pelajaran: setiap kali dependensi bernative berubah (`package.json`), APK lama
+tidak akan bisa memakainya. `npx react-native run-android` yang memakai bundle
+Metro akan tampak "segar" padahal bagian native-nya basi — gejalanya justru
+error aneh yang terlihat seperti bug kode.
 
 ## Tidak ada enkripsi database
 
