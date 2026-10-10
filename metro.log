@@ -56,3 +56,9 @@ Starting dev server on http://localhost:8081
  WARN  Attempted to import the module "C:\DEV\spazia-qr-order-loyalty-points\spazio-admin-react-native\node_modules\react-native\src\private\featureflags\ReactNativeFeatureFlags" which is not listed in the "exports" of "C:\DEV\spazia-qr-order-loyalty-points\spazio-admin-react-native\node_modules\react-native" under the requested subpath "./src/private/featureflags/ReactNativeFeatureFlags". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
  BUNDLE  ./index.js ░░░░░░░░░░░░░░░░ 0% (0/1)
  BUNDLE  ./index.js 
+ INFO  Reloading connected app(s)...
+ BUNDLE  ./index.js ░░░░░░░░░░░░░░░░ 0% (0/1)
+ WARN  Attempted to import the module "C:\DEV\spazia-qr-order-loyalty-points\spazio-admin-react-native\node_modules\react-native\src\private\featureflags\ReactNativeFeatureFlags" which is not listed in the "exports" of "C:\DEV\spazia-qr-order-loyalty-points\spazio-admin-react-native\node_modules\react-native" under the requested subpath "./src/private/featureflags/ReactNativeFeatureFlags". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ BUNDLE  ./index.js 
+ WARN  Attempted to import the module "C:\DEV\spazia-qr-order-loyalty-points\spazio-admin-react-native\node_modules\react-native\src\private\featureflags\ReactNativeFeatureFlags" which is not listed in the "exports" of "C:\DEV\spazia-qr-order-loyalty-points\spazio-admin-react-native\node_modules\react-native" under the requested subpath "./src/private/featureflags/ReactNativeFeatureFlags". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ ERROR  [timeout] connection terminated with Device for app='com.melvapos.spazio' on device='2311DRK48G - 16 - API 36' after not responding for 60 seconds.
