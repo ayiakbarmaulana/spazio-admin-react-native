@@ -114,6 +114,23 @@ keluar. Cetak ulang adalah keputusan kasir, dan aplikasi memastikan
 keputusannya berbasis informasi: gagal berarti tidak ada byte yang sampai, jadi
 aman dicetak ulang.
 
+## Spinner WebView butuh batas waktu
+
+`react-native-webview` tidak selalu memanggil `onError` saat halaman gagal
+dimuat. Kalau host tujuan tidak bisa dihubungi — server mati, port salah,
+firewall memblokir — Chromium menyerah di level navigasi dan yang menyala hanya
+`onLoadProgress` dengan progress di bawah 1, tidak pernah 1. Tanpa pengaman,
+spinner berputar selamanya tanpa pesan apa pun.
+
+Karena itu `src/webview/webViewLoadState.ts` memasang batas waktu 20 detik dan
+`SpazioWebView.tsx` menampilkan layar gagal berisi alasan, origin yang dipakai,
+dan tombol **Coba lagi**. Batas waktu 20 detik dipilih supaya bundel Next.js
+pertama kali masih sempat selesai di jaringan lambat.
+
+Konsekuensinya: halaman yang butuh lebih dari 20 detik untuk memuat akan
+menampilkan layar gagal, padahal sebenarnya hanya lambat. Kalau itu terjadi di
+lapangan, naikkan `LOAD_TIMEOUT_MS` — jangan hapus timernya.
+
 ## Node 20 tidak didukung
 
 `npm install` memunculkan peringatan `EBADENGINE`. Tooling Metro dan Babel

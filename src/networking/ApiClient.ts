@@ -7,6 +7,18 @@
 // sudah ada di sana. Kunci yang ditanam di APK bisa dibongkar siapa pun yang
 // punya file-nya, jadi tidak ada gunanya.
 
+/**
+ * Origin dev default.
+ *
+ * `localhost:3000` dipakai lewat `adb reverse tcp:3000 tcp:3000`, yang
+ * memetakan port 3000 di HP ke laptop lewat kabel USB. Ini jalur dev yang
+ * benar-benar terbukti jalan: koneksi tidak lewat Wi-Fi, jadi kebal firewall
+ * Windows (yang diam-diam memblokir node.exe inbound di profil Public) dan
+ * kebal IP laptop yang berubah-ubah karena DHCP.
+ *
+ * IP LAN (mis. `192.168.1.9:3000`) hanya berfungsi kalau firewall mengizinkan;
+ * pakai itu sebagai jalan terakhir di perangkat yang tidak bisa di-USB.
+ */
 export const DEFAULT_ORIGIN = 'http://localhost:3000';
 
 export type HealthResult = {

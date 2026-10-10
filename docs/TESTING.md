@@ -28,7 +28,9 @@ npm test -- --watch           # mode pantau
 | `print-job-state-machine.test.ts` | Transisi status; `unknown` untuk transmisi yang terputus. |
 | `print-queue.test.ts` | Serial per printer, paralel antar printer; kegagalan tidak menghentikan antrean. |
 | `print-job-repository.test.ts` | Dedup idempotency; pemulihan job macet. |
-| `origin-allowlist.test.ts` | Origin palsu (`@evil.com`, port berbeda) ditolak. |
+| `origin-allowlist.test.ts` | Origin palsu (`@evil.com`, port berbeda) ditolak; origin dev tidak bocor ke bundel rilis; `DEFAULT_ORIGIN` selalu ada di allowlist. |
+| `origin-whitelist.test.ts` | Bentuk pola `originWhitelist` cocok dengan yang dipakai library; origin ber-prefix jahat tetap ditahan `isAllowedNavigation`. |
+| `webview-load-state.test.ts` | Spinner berhenti pada semua jalur (load, HTTP error, timeout); kegagalan tidak ditimpa alasan yang kurang spesifik. |
 | `validation-and-backoff.test.ts` | Validasi IPv4 (termasuk leading zero); backoff dengan jitter; klasifikasi error socket. |
 
 ### `__tests__/integration/`

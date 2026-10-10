@@ -27,6 +27,41 @@ Pemeriksaan memakai `new URL(url).origin`, bukan pencocokan string. Itu penting:
 tapi sebenarnya mengarah ke `evil.example.com`. Hanya parsing URL yang bisa
 membedakannya.
 
+### Origin dev terpisah dari produksi
+
+Origin dev (`http://localhost:3000`, `http://10.0.2.2:3000`) dikunci di balik
+`__DEV__`. Di bundel rilis daftarnya kosong, jadi tidak ada server lokal yang
+bisa memanggil bridge cetak di HP kasir.
+
+Jangan ganti mekanisme ini dengan flag env biasa: flag env gampang lupa
+dimatikan, sedangkan `__DEV__` di-false-kan Metro secara otomatis saat
+bundling rilis.
+
+### Dua lapis, dan kenapa keduanya perlu
+
+| Lapis | File | Tugas |
+| --- | --- | --- |
+| `originWhitelist` (WebView) | `src/security/originWhitelist.ts` | Menyaring URL **sebelum** halaman dimuat |
+| `isAllowedNavigation` | `src/security/originAllowlist.ts` | Menahan navigasi ke origin di luar daftar |
+
+`originWhitelist` **bukan** pengaman. Pola di situ dicocokkan sebagai awalan
+regex, sehingga `https://spazio.melvapos.com.evil.example.com` dan
+`https://spazio.melvapos.com:8443` sama-sama lolos. Yang benar-benar menahan
+keduanya adalah `isAllowedNavigation`. Kedua sifat itu diuji di
+`__tests__/unit/origin-whitelist.test.ts`.
+
+Jangan menulis pola sendiri di komponen WebView — pakai `toOriginWhitelist()`,
+dan sadari bentuk polanya harus `${origin}*`, bukan `${origin}/*`. Versi `/*`
+tidak pernah cocok karena react-native-webview membandingkan terhadap origin
+saja (tanpa path), dan kegagalannya berupa spinner tanpa pesan.
+
+### Firewall saat dev
+
+Windows Firewall memblokir `node.exe` inbound di profil Public. Membuka port
+untuk LAN berarti mengekspos server dev ke seluruh jaringan. Jalur yang
+disarankan: `adb reverse tcp:3000 tcp:3000`, lalu pakai `http://localhost:3000`
+di HP. Lewat USB, tidak menyentuh firewall sama sekali.
+
 Navigasi non-`http(s)` (`tel:`, `mailto:`, `whatsapp:`, `intent:`) selalu
 ditolak di WebView dan diteruskan ke aplikasi lain lewat `Linking`.
 

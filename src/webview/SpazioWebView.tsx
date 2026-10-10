@@ -9,24 +9,46 @@
 //    allowlist. Tanpa cek itu, iframe pihak ketiga bisa mengirim PRINT_REQUEST.
 //  - Tautan eksternal dibuka lewat Linking, TIDAK di dalam WebView.
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import {
   WebView,
   type WebViewMessageEvent,
   type WebViewNavigation,
 } from 'react-native-webview';
-import { Colors } from '../app/theme';
+import { Colors, FontSize, Radius, Spacing } from '../app/theme';
 import {
   DEFAULT_ORIGIN,
 } from '../networking/ApiClient';
 import {
+  ALLOWED_ORIGINS,
   isAllowedBridgeOrigin,
   isAllowedNavigation,
   isExternalLink,
+  TRUSTED_NAVIGATION_ORIGINS,
 } from '../security/originAllowlist';
+import { toOriginWhitelist } from '../security/originWhitelist';
 import type { BridgeHandler } from './bridgeHandler';
 import { BRIDGE_CHANNEL } from './bridgeProtocol';
+import {
+  INITIAL_LOAD_STATE,
+  LOAD_TIMEOUT_MS,
+  webViewLoadReducer,
+} from './webViewLoadState';
 
 type Props = {
   handler: BridgeHandler;
@@ -48,7 +70,6 @@ const INJECTED_BEFORE_LOAD = `
   function post(message) {
     window.ReactNativeWebView.postMessage(JSON.stringify(message));
   }
-
   window.SpazioNative = {
     isAvailable: true,
     send: function (type, payload) {
@@ -89,10 +110,38 @@ export function SpazioWebView({
   onBridgeError,
 }: Props) {
   const webViewRef = useRef<React.ElementRef<typeof WebView>>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const [state, dispatch] = useReducer(
+    webViewLoadReducer,
+    INITIAL_LOAD_STATE,
+  );
+  const { loading, failed, reason } = state;
+  // Naikkan untuk memaksa WebView dimuat ulang â€” satu-satunya cara andal
+  // keluar dari halaman yang gagal tanpa mematikan app.
+  const [reloadKey, setReloadKey] = useState(0);
 
   const source = useMemo(() => ({ uri: origin }), [origin]);
+
+  // react-native-webview menyaring URL di sini SEBELUM
+  // onShouldStartLoadWithRequest dipanggil, dan default library-nya adalah
+  // ['http://*', 'https://*']. Bentuk pola harus persis seperti yang dipakai
+  // library — itu diuji di origin-whitelist.test.ts, bukan ditebak di sini.
+  const originWhitelist = useMemo(
+    () =>
+      toOriginWhitelist([...ALLOWED_ORIGINS, ...TRUSTED_NAVIGATION_ORIGINS]),
+    [],
+  );
+
+  // Jaring pengaman terakhir. Kalau host tujuan tidak bisa dihubungi,
+  // react-native-webview tidak memanggil onError sama sekali â€” hanya berhenti
+  // diam. Timer ini yang mengubah "muter selamanya" jadi pesan yang bisa
+  // ditindaklanjuti kasir.
+  useEffect(() => {
+    if (!loading) {
+      return undefined;
+    }
+    const timer = setTimeout(() => dispatch({ type: 'timeout' }), LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [loading, reloadKey]);
 
   const handleMessage = useCallback(
     async (event: WebViewMessageEvent) => {
@@ -132,39 +181,58 @@ export function SpazioWebView({
   return (
     <View style={styles.container}>
       <WebView
+        key={reloadKey}
         ref={webViewRef}
         source={source}
         injectedJavaScriptBeforeContentLoaded={INJECTED_BEFORE_LOAD}
         onMessage={handleMessage}
         onShouldStartLoadWithRequest={handleNavigation}
-        onLoadStart={() => setLoading(true)}
+        onLoadStart={() => dispatch({ type: 'start' })}
         // onLoadEnd tidak selalu terpanggil saat PWA dilayani service worker
         // (navigasi pertama ditahan onShouldStartLoadWithRequest). Pakai
         // onLoadProgress sebagai sinyal utama; onLoad/onLoadEnd tetap dipasang
         // untuk jalur normal.
-        onLoadProgress={event => {
-          if (event.nativeEvent.progress >= 1) {
-            setLoading(false);
-          }
-        }}
-        onLoad={() => setLoading(false)}
-        onLoadEnd={() => setLoading(false)}
-        onError={() => {
-          setLoading(false);
-          setFailed(true);
-        }}
+        onLoadProgress={event =>
+          dispatch({ type: 'progress', progress: event.nativeEvent.progress })
+        }
+        onLoad={() => dispatch({ type: 'done' })}
+        onLoadEnd={() => dispatch({ type: 'done' })}
+        // Halaman error (404/500) TIDAK memicu onError. Tanpa onHttpError,
+        // status itu tampil sebagai spinner abadi.
+        onHttpError={event =>
+          dispatch({
+            type: 'fail',
+            reason: `Server membalas ${event.nativeEvent.statusCode}.`,
+          })
+        }
+        onError={event =>
+          dispatch({ type: 'fail', reason: event.nativeEvent.description })
+        }
         // Ini jalur LAN/localhost, bukan halaman publik.
         allowFileAccess={false}
         allowUniversalAccessFromFileURLs={false}
         // Cookie sesi harus ikut supaya kasir tidak login ulang tiap buka app.
         sharedCookiesEnabled
         thirdPartyCookiesEnabled={false}
-        originWhitelist={['https://*']}
+        originWhitelist={originWhitelist}
         testID="spazio-webview"
       />
       {loading && !failed ? (
         <View style={styles.overlay} pointerEvents="none">
           <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : null}
+      {failed ? (
+        <View style={styles.overlay}>
+          <Text style={styles.failTitle}>Gagal memuat layar kasir</Text>
+          {reason ? <Text style={styles.failReason}>{reason}</Text> : null}
+          <Text style={styles.failOrigin}>{origin}</Text>
+          <Pressable
+            style={styles.retryButton}
+            onPress={() => setReloadKey(k => k + 1)}
+            testID="spazio-webview-retry">
+            <Text style={styles.retryLabel}>Coba lagi</Text>
+          </Pressable>
         </View>
       ) : null}
     </View>
@@ -182,5 +250,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.background,
+  },
+  failTitle: {
+    color: Colors.text,
+    fontSize: FontSize.lg,
+    fontWeight: '600',
+    paddingHorizontal: Spacing.xl,
+    textAlign: 'center',
+  },
+  failReason: {
+    color: Colors.textMuted,
+    fontSize: FontSize.sm,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
+    textAlign: 'center',
+  },
+  failOrigin: {
+    color: Colors.textFaint,
+    fontSize: FontSize.xs,
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.xl,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.md,
+    marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+  },
+  retryLabel: {
+    color: Colors.text,
+    fontSize: FontSize.md,
+    fontWeight: '600',
   },
 });
