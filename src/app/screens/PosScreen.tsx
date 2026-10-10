@@ -4,9 +4,10 @@
 // Tombol pengaturan diletakkan sebagai FAB, bukan di header, supaya tetap bisa
 // ditekan di layar kecil dan tidak tertutup header WebView.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SpazioWebView } from '../../webview/SpazioWebView';
 import { useAppServices } from '../AppServices';
@@ -16,9 +17,32 @@ import type { RootStackParamList } from '../navigation';
 export function PosScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
   const { bridge, jobStatusListeners } = useAppServices();
   const [bridgeError, setBridgeError] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  // Tombol native (🖨 dan Status) menutupi sudut halaman PWA. Disembunyikan
+  // otomatis setelah beberapa detik supaya tidak mengganggu; muncul lagi saat
+  // layar disentuh.
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showControls = useCallback(() => {
+    setControlsVisible(true);
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+    }
+    hideTimer.current = setTimeout(() => setControlsVisible(false), 4000);
+  }, []);
+
+  useEffect(() => {
+    showControls();
+    return () => {
+      if (hideTimer.current) {
+        clearTimeout(hideTimer.current);
+      }
+    };
+  }, [showControls]);
 
   // Penghitung job menunggu: memberi tahu kasir bahwa masih ada antrean tanpa
   // harus membuka Riwayat Cetak.
@@ -41,48 +65,87 @@ export function PosScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
-      <SpazioWebView handler={bridge} onBridgeError={handleBridgeError} />
+    <View
+      style={styles.container}
+      // Menangkap sentuhan tanpa merebutnya (return false) supaya WebView tetap
+      // menerima event yang sama. Ini satu-satunya cara memunculkan tombol
+      // kembali saat halaman web sedang fokus.
+      onStartShouldSetResponderCapture={() => {
+        showControls();
+        return false;
+      }}
+      onMoveShouldSetResponderCapture={() => {
+        showControls();
+        return false;
+      }}>
+      {/*
+        WebView digeser ke bawah status bar. Android 16 (targetSdk 36) memaksa
+        edge-to-edge, jadi tanpa padding ini bagian atas halaman tertutup status
+        bar dan ketukan di sana memunculkan panel notifikasi, bukan menyentuh
+        halaman.
+      */}
+      <View style={[styles.webViewSlot, { paddingTop: insets.top }]}>
+        <SpazioWebView handler={bridge} onBridgeError={handleBridgeError} />
+      </View>
 
       {bridgeError ? (
         <Pressable
-          style={styles.bannerDanger}
+          style={[styles.bannerDanger, { top: insets.top }]}
           onPress={() => setBridgeError(null)}>
           <Text style={styles.bannerText}>{bridgeError}</Text>
         </Pressable>
       ) : null}
 
-      <Pressable
-        style={styles.fab}
-        accessibilityRole="button"
-        accessibilityLabel="Pengaturan cetak"
-        testID="open-print-settings"
-        onPress={() => navigation.navigate('PrinterList')}>
-        <Text style={styles.fabIcon}>🖨</Text>
-        {pendingCount > 0 ? (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{pendingCount}</Text>
-          </View>
-        ) : null}
-      </Pressable>
+      <View
+        style={[styles.controls, !controlsVisible && styles.controlsHidden]}
+        pointerEvents={controlsVisible ? 'box-none' : 'none'}>
+        <Pressable
+          style={[styles.fab, { bottom: Spacing.xl + insets.bottom }]}
+          accessibilityRole="button"
+          accessibilityLabel="Pengaturan cetak"
+          testID="open-print-settings"
+          onPress={() => navigation.navigate('PrinterList')}>
+          <Text style={styles.fabIcon}>🖨</Text>
+          {pendingCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{pendingCount}</Text>
+            </View>
+          ) : null}
+        </Pressable>
 
-      <Pressable
-        style={styles.deviceButton}
-        accessibilityRole="button"
-        testID="open-device-status"
-        onPress={() => navigation.navigate('DeviceStatus')}>
-        <Text style={styles.deviceButtonText}>Status</Text>
-      </Pressable>
+        <Pressable
+          style={[
+            styles.deviceButton,
+            {
+              bottom: Spacing.xl + insets.bottom,
+              left: Spacing.lg + insets.left,
+            },
+          ]}
+          accessibilityRole="button"
+          testID="open-device-status"
+          onPress={() => navigation.navigate('DeviceStatus')}>
+          <Text style={styles.deviceButtonText}>Status</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  webViewSlot: { flex: 1, backgroundColor: Colors.background },
+  controls: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 1,
+  },
+  controlsHidden: { opacity: 0 },
   fab: {
     position: 'absolute',
     right: Spacing.lg,
-    bottom: Spacing.xl,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -112,8 +175,6 @@ const styles = StyleSheet.create({
   },
   deviceButton: {
     position: 'absolute',
-    left: Spacing.lg,
-    bottom: Spacing.xl,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
     borderRadius: Radius.sm,

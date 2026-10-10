@@ -1,5 +1,5 @@
 // src/printing/transportErrors.ts
-// Terjemahkan error socket mentah jadi taksonomi error kita (PRD §10.1).
+// Terjemahkan error socket/BLE mentah jadi taksonomi error kita (PRD §10.1).
 //
 // Driver TCP tidak punya kode error yang seragam antar platform, jadi yang
 // dipakai adalah pencocokan teks pesan. Rapuh, tapi lebih baik daripada
@@ -10,6 +10,15 @@ import { messageForError } from './PrintJobStateMachine';
 
 /** Cocokkan pesan error platform ke kode kita, berurutan dari yang spesifik. */
 const PATTERNS: [RegExp, PrintErrorCode][] = [
+  // ── BLE / Bluetooth ────────────────────────────────────────────────────
+  // Ditaruh di depan: pesan BLE sering ikut memuat kata "timeout"/"denied" dan
+  // akan salah klasifikasi kalau pola jaringan dicek lebih dulu.
+  [/bluetooth.*(off|disabled|not (available|powered))|no bluetooth adapter/i, 'BLUETOOTH_DISABLED'],
+  [/BLUETOOTH_(CONNECT|SCAN)|bluetooth.*permission|permission.*bluetooth/i, 'BLUETOOTH_PERMISSION_DENIED'],
+  [/characteristic.*not found|no writable char|service.*not found/i, 'CHARACTERISTIC_NOT_FOUND'],
+  [/device.*(not found|disappeared)|not in range|adapter is off/i, 'DEVICE_NOT_FOUND'],
+  [/disconnect/, 'DEVICE_DISCONNECTED'],
+  // ── Jaringan ───────────────────────────────────────────────────────────
   [/ECONNREFUSED|connection refused|refused/i, 'CONNECTION_REFUSED'],
   [/ETIMEDOUT|timeout|timed out/i, 'CONNECTION_TIMEOUT'],
   [/ENETUNREACH|EHOSTUNREACH|unreachable|no route/i, 'UNREACHABLE_HOST'],

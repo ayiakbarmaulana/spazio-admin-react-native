@@ -29,7 +29,7 @@ Konsekuensi yang harus dihadapi:
 
 | Fitur | Alasan |
 | --- | --- |
-| Bluetooth / BLE | Printer BLE kelas POS butuh handshake vendor sebelum menerima ESC/POS mentah; implementasinya berbeda per model |
+| BLE di luar profil ISSC | Driver mencoba ISSC Transparent UART lalu karakteristik tulis pertama; printer dengan handshake vendor khusus masih bisa gagal dengan `CHARACTERISTIC_NOT_FOUND` |
 | USB / OTG | Butuh driver USB host dan negosiasi endpoint per model |
 | iOS | Belum ada jalur cetak; `ios/` masih dari template |
 | Barcode / QR di struk | Belum ada kebutuhan; sebagian printer murah mengabaikannya dengan cara yang sulit didiagnosis |

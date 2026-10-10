@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!--
@@ -7,6 +8,38 @@
       dinyatakan eksplisit supaya permintaannya terlihat saat review.
     -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      Mencetak ke printer Bluetooth LE (GATT). react-native-ble-plx sudah
+      menyumbang izin ini lewat manifest-nya sendiri; dinyatakan ulang di sini
+      supaya terlihat saat review dan tidak bergantung pada urutan merge.
+        - API ≤ 30 : BLUETOOTH / BLUETOOTH_ADMIN (izin install-time)
+        - API ≥ 31 : BLUETOOTH_SCAN / BLUETOOTH_CONNECT (izin runtime)
+      ACCESS_FINE_LOCATION tidak diminta: pemindaian memakai flag
+      neverForLocation karena kami tidak menurunkan lokasi dari BLE scan.
+    -->
+    <uses-permission
+      android:name="android.permission.BLUETOOTH"
+      android:maxSdkVersion="30" />
+    <uses-permission
+      android:name="android.permission.BLUETOOTH_ADMIN"
+      android:maxSdkVersion="30" />
+    <uses-permission
+      android:name="android.permission.BLUETOOTH_SCAN"
+      android:usesPermissionFlags="neverForLocation"
+      tools:targetApi="s" />
+    <uses-permission
+      android:name="android.permission.BLUETOOTH_CONNECT"
+      tools:targetApi="s" />
+
+    <!--
+      Bluetooth LE wajib ada; LAN tidak. Aplikasi tetap bisa dipakai dengan
+      printer LAN saja, jadi `required=false` — toko yang printernya LAN jangan
+      sampai tidak bisa memasang app ini.
+    -->
+    <uses-feature
+      android:name="android.hardware.bluetooth_le"
+      android:required="false" />
 
     <application
       android:name=".MainApplication"

@@ -91,8 +91,8 @@ it('nama kosong dan tujuan kosong sama-sama ditolak', () => {
 
 it('jenis koneksi yang tidak didukung ditolak, bukan disimpan diam-diam', () => {
   const errors = validatePrinterConfig({
-    name: 'Printer BLE',
-    connectionType: 'bluetooth',
+    name: 'Printer USB',
+    connectionType: 'usb',
     destinations: ['customer_receipt'],
   });
 
@@ -183,4 +183,64 @@ it('kode error socket diklasifikasikan ke taksonomi kita', () => {
 it('classifyTransportError juga menerima nilai non-Error', () => {
   expect(classifyTransportError('ECONNREFUSED')).toBe('CONNECTION_REFUSED');
   expect(classifyTransportError(null)).toBe('UNKNOWN_TRANSPORT_ERROR');
+});
+
+// ── Validasi Bluetooth ──────────────────────────────────────────────────────
+it('printer BLE tanpa deviceId diterima: driver memilih perangkat terpasang', () => {
+  const errors = validatePrinterConfig({
+    name: 'Printer BLE',
+    connectionType: 'bluetooth',
+    destinations: ['customer_receipt'],
+  });
+  expect(errors).toEqual([]);
+});
+
+it('deviceId Bluetooth yang bentuknya salah ditolak, bukan disimpan diam-diam', () => {
+  const errors = validatePrinterConfig({
+    name: 'Printer BLE',
+    connectionType: 'bluetooth',
+    destinations: ['customer_receipt'],
+    bluetooth: { deviceId: 'bukan-mac' },
+  });
+  expect(errors.some(e => /Alamat perangkat Bluetooth/.test(e))).toBe(true);
+});
+
+it('MAC dan UUID perangkat sama-sama diterima', () => {
+  const mac = validatePrinterConfig({
+    name: 'Printer BLE',
+    connectionType: 'bluetooth',
+    destinations: ['customer_receipt'],
+    bluetooth: { deviceId: 'AA:BB:CC:DD:EE:FF' },
+  });
+  const ios = validatePrinterConfig({
+    name: 'Printer BLE',
+    connectionType: 'bluetooth',
+    destinations: ['customer_receipt'],
+    bluetooth: { deviceId: 'E621E1F8-C36C-495A-93FC-0C247A3E6E5F' },
+  });
+  expect(mac).toEqual([]);
+  expect(ios).toEqual([]);
+});
+
+it('override UUID Bluetooth yang bentuknya salah ditolak', () => {
+  const errors = validatePrinterConfig({
+    name: 'Printer BLE',
+    connectionType: 'bluetooth',
+    destinations: ['customer_receipt'],
+    bluetooth: { deviceId: 'AA:BB:CC:DD:EE:FF', serviceUuid: 'nope' },
+  });
+  expect(errors.some(e => /UUID Bluetooth/.test(e))).toBe(true);
+});
+
+// ── classifyTransportError: jalur Bluetooth ─────────────────────────────────
+it('error Bluetooth diklasifikasi ke kode sendiri, bukan timeout jaringan', () => {
+  expect(classifyTransportError(new Error('Bluetooth adapter is PoweredOff'))).toBe(
+    'BLUETOOTH_DISABLED',
+  );
+  expect(
+    classifyTransportError(new Error('no writable characteristic found')),
+  ).toBe('CHARACTERISTIC_NOT_FOUND');
+  expect(classifyTransportError(new Error('Device disconnected'))).toBe(
+    'DEVICE_DISCONNECTED',
+  );
 });

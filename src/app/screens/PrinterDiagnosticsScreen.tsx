@@ -9,10 +9,14 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { getPrinter } from '../../printing/PrinterStore';
+import { BlePrinterDriver } from '../../printing/BlePrinterDriver';
 import { LanPrinterDriver } from '../../printing/LanPrinterDriver';
+import type { PrinterTransport } from '../../printing/PrinterTransport';
 import { buildReceipt } from '../../printing/ReceiptTemplate';
 import type { PrintJobError, PrinterConfig } from '../../types/printing';
 import {
+  DEFAULT_BLUETOOTH_CONNECT_TIMEOUT_MS,
+  DEFAULT_BLUETOOTH_WRITE_TIMEOUT_MS,
   DEFAULT_CONNECT_TIMEOUT_MS,
   DEFAULT_WRITE_TIMEOUT_MS,
   PAPER_COLUMNS,
@@ -67,7 +71,10 @@ export function PrinterDiagnosticsScreen() {
     if (!printer) {
       return;
     }
-    if (printer.connectionType !== 'lan') {
+    if (
+      printer.connectionType !== 'lan' &&
+      printer.connectionType !== 'bluetooth'
+    ) {
       setOutcome({
         connected: false,
         transmitted: false,
@@ -84,12 +91,21 @@ export function PrinterDiagnosticsScreen() {
     setTesting(true);
     setOutcome(null);
 
-    const driver = new LanPrinterDriver({
-      host: printer.host ?? '',
-      port: printer.port ?? 9100,
-      connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS,
-      writeTimeoutMs: DEFAULT_WRITE_TIMEOUT_MS,
-    });
+    const driver: PrinterTransport =
+      printer.connectionType === 'bluetooth'
+        ? new BlePrinterDriver({
+            host: '',
+            port: 9100,
+            connectTimeoutMs: DEFAULT_BLUETOOTH_CONNECT_TIMEOUT_MS,
+            writeTimeoutMs: DEFAULT_BLUETOOTH_WRITE_TIMEOUT_MS,
+            bluetooth: printer.bluetooth,
+          })
+        : new LanPrinterDriver({
+            host: printer.host ?? '',
+            port: printer.port ?? 9100,
+            connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS,
+            writeTimeoutMs: DEFAULT_WRITE_TIMEOUT_MS,
+          });
 
     const result = printSample
       ? await driver.send(

@@ -237,9 +237,46 @@ it('status perubahan dilaporkan ke bridge lewat onJobStatusChange', async () => 
   expect(changes).toContain('submitted');
 });
 
-it('printer bluetooth → TRANSPORT_UNSUPPORTED, tidak diam-diam dianggap jalan', async () => {
+it('printer bluetooth memakai driver BLE, bukan driver LAN', async () => {
+  const db = new FakeDatabase();
+  const repo = new PrintJobRepository(db);
+  const bleTargets: { bluetooth?: { deviceId?: string } }[] = [];
+  const dispatcher = new PrintDispatcher({
+    repo,
+    getPrinter: async () =>
+      printerConfig({
+        connectionType: 'bluetooth',
+        host: undefined,
+        port: undefined,
+        bluetooth: { deviceId: 'AA:BB:CC:DD:EE:FF', deviceName: 'VSC TM-58V' },
+      }),
+    transportFactory: target => new FakeTransport(target),
+    // BLE punya pabrik sendiri: kalau printer bluetooth memakai transportFactory
+    // LAN, tombol cetak akan menggantung menunggu socket yang tidak pernah ada.
+    bleTransportFactory: target => {
+      bleTargets.push(target);
+      return new FakeTransport(target);
+    },
+  });
+
+  // submit() sudah menjalankan job; memanggil run() lagi = struk dobel.
+  dispatcher.submit({
+    orderId: 'ord-1',
+    destination: 'customer_receipt',
+    printerId: 'prn-1',
+    payload: order,
+  });
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  expect(bleTargets).toHaveLength(1);
+  expect(bleTargets[0].bluetooth?.deviceId).toBe('AA:BB:CC:DD:EE:FF');
+  // Driver BLE dikonstruksi dari target; FakeTransport tetap merekam byte.
+  expect(FakeTransport.sent).toHaveLength(1);
+});
+
+it('printer USB ditolak dengan TRANSPORT_UNSUPPORTED, tanpa membuka transport', async () => {
   const { repo, dispatcher } = setup(
-    printerConfig({ connectionType: 'bluetooth', host: undefined }),
+    printerConfig({ connectionType: 'usb', host: undefined }),
   );
 
   const { job } = dispatcher.submit({

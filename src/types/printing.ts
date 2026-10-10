@@ -20,6 +20,11 @@ export type PrinterConfig = {
   host?: string;
   /** Hanya untuk "lan". Default 9100. */
   port?: number;
+  /**
+   * Hanya untuk "bluetooth". Konfigurasi minimal; kalau kosong, driver memilih
+   * perangkat yang sudah dipasangkan di Android (lihat BlePrinterDriver).
+   */
+  bluetooth?: BluetoothTarget;
   enabled: boolean;
   /** Tujuan yang dilayani printer ini. Boleh lebih dari satu. */
   destinations: PrintDestination[];
@@ -27,6 +32,26 @@ export type PrinterConfig = {
   paperWidthMm: PaperWidthMm;
   createdAt: string;
   updatedAt: string;
+};
+
+/**
+ * Target BLE. SEMUA field opsional dengan sengaja: printer BLE murah hanya
+ * menerima satu koneksi, jadi alamat fisik perangkat (MAC di Android, UUID
+ * per-perangkat di iOS) tidak stabil antar HP. Kalau kosong, driver memilih
+ * perangkat terpasang yang namanya cocok dengan `PRINTER_NAME_HINT`.
+ *
+ * `deviceId` TIDAK PERNAH datang dari WebView — hanya dari pemilihan pengguna
+ * di layar Pengaturan Printer.
+ */
+export type BluetoothTarget = {
+  /** id perangkat dari BLE stack OS. Android = MAC, iOS = UUID per-app. */
+  deviceId?: string;
+  /** Nama yang ditampilkan OS, mis. "VSC TM-58V". Membantu pemilihan otomatis. */
+  deviceName?: string;
+  /** Override layanan GATT. Kosong = pakai kandidat di bleProfiles.ts. */
+  serviceUuid?: string;
+  /** Override karakteristik tulis. Kosong = dicari otomatis. */
+  characteristicUuid?: string;
 };
 
 /**
@@ -60,6 +85,17 @@ export type PrintErrorCode =
   | 'CONNECTION_LOST_DURING_SEND'
   | 'WRITE_FAILED'
   | 'TRANSPORT_UNSUPPORTED'
+  // ── Bluetooth ──────────────────────────────────────────────────────────
+  /** Adaptor Bluetooth mati atau tidak ada di perangkat. */
+  | 'BLUETOOTH_DISABLED'
+  /** Izin runtime BLUETOOTH_CONNECT/BLUETOOTH_SCAN ditolak pengguna. */
+  | 'BLUETOOTH_PERMISSION_DENIED'
+  /** Tidak ada perangkat terpasang/terdeteksi yang cocok. */
+  | 'DEVICE_NOT_FOUND'
+  /** Perangkat hilang di tengah jalan (printer dimatikan / keluar jangkauan). */
+  | 'DEVICE_DISCONNECTED'
+  /** Terhubung, tapi tidak ada karakteristik tulis — printer tidak kompatibel. */
+  | 'CHARACTERISTIC_NOT_FOUND'
   | 'UNKNOWN_TRANSPORT_ERROR';
 
 export type PrintJobError = {
@@ -185,3 +221,11 @@ export const DEFAULT_LAN_PORT = 9100;
 
 export const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
 export const DEFAULT_WRITE_TIMEOUT_MS = 8000;
+
+/**
+ * Batas waktu koneksi BLE. Lebih longgar dari LAN: BLE ke printer murah bisa
+ * menggantung lama di Android kalau ikatan (bond) hilang.
+ */
+export const DEFAULT_BLUETOOTH_CONNECT_TIMEOUT_MS = 12000;
+/** Batas waktu per potongan tulis BLE — bukan total; total = chunk × jeda. */
+export const DEFAULT_BLUETOOTH_WRITE_TIMEOUT_MS = 10000;

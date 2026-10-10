@@ -86,6 +86,19 @@ const ERROR_MESSAGES: Record<PrintErrorCode, string> = {
     'Koneksi terputus saat mengirim. Periksa kertas printer.',
   WRITE_FAILED: 'Gagal mengirim data ke printer.',
   TRANSPORT_UNSUPPORTED: 'Jenis koneksi ini belum didukung.',
+  BLUETOOTH_DISABLED:
+    'Bluetooth mati atau tidak tersedia. Nyalakan Bluetooth, lalu coba lagi.',
+  BLUETOOTH_PERMISSION_DENIED:
+    'Izin Bluetooth ditolak. Berikan izin lewat Pengaturan Android.',
+  DEVICE_NOT_FOUND:
+    'Printer Bluetooth tidak ditemukan. Pasangkan printernya dulu di ' +
+    'Pengaturan Bluetooth Android, lalu nyalakan printer.',
+  DEVICE_DISCONNECTED:
+    'Koneksi Bluetooth terputus. Nyalakan ulang printer dan pastikan dalam ' +
+    'jangkauan.',
+  CHARACTERISTIC_NOT_FOUND:
+    'Printer ini tidak menerima data cetak (karakteristik BLE tidak cocok). ' +
+    'Coba printer lain atau gunakan koneksi LAN.',
   UNKNOWN_TRANSPORT_ERROR: 'Terjadi kesalahan cetak yang tidak dikenali.',
 };
 

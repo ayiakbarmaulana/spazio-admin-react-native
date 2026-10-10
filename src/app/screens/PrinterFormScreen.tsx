@@ -24,15 +24,23 @@ import {
 import { TRANSPORT_REGISTRY } from '../../printing/PrinterRegistry';
 import { validatePrinterConfig } from '../../printing/validatePrinterConfig';
 import { DEFAULT_LAN_PORT } from '../../types/printing';
-import type { PaperWidthMm, PrintDestination } from '../../types/printing';
+import type {
+  PaperWidthMm,
+  PrintDestination,
+  PrinterConnectionType,
+} from '../../types/printing';
 import { Colors, FontSize, Spacing } from '../theme';
 import { Body, Button, Card, Notice, Screen, SectionTitle } from '../ui';
 import type { RootStackParamList } from '../navigation';
 
 type FormState = {
   name: string;
+  connectionType: PrinterConnectionType;
   host: string;
   port: string;
+  /** Dipakai hanya saat connectionType === 'bluetooth'. Kosong = auto-pilih. */
+  btDeviceId: string;
+  btDeviceName: string;
   paperWidthMm: PaperWidthMm;
   destinations: PrintDestination[];
   enabled: boolean;
@@ -40,8 +48,11 @@ type FormState = {
 
 const INITIAL: FormState = {
   name: '',
+  connectionType: 'lan',
   host: '',
   port: String(DEFAULT_LAN_PORT),
+  btDeviceId: '',
+  btDeviceName: '',
   paperWidthMm: 58,
   destinations: ['customer_receipt'],
   enabled: true,
@@ -69,8 +80,11 @@ export function PrinterFormScreen() {
       }
       setForm({
         name: printer.name,
+        connectionType: printer.connectionType,
         host: printer.host ?? '',
         port: String(printer.port ?? DEFAULT_LAN_PORT),
+        btDeviceId: printer.bluetooth?.deviceId ?? '',
+        btDeviceName: printer.bluetooth?.deviceName ?? '',
         paperWidthMm: printer.paperWidthMm,
         destinations: printer.destinations,
         enabled: printer.enabled,
@@ -90,11 +104,20 @@ export function PrinterFormScreen() {
   const submit = () => {
     // Port kosong → pakai default, bukan NaN.
     const port = form.port.trim() === '' ? DEFAULT_LAN_PORT : Number(form.port);
+    const isLan = form.connectionType === 'lan';
     const input = {
       name: form.name.trim(),
-      connectionType: 'lan' as const,
-      host: form.host.trim(),
-      port,
+      connectionType: form.connectionType,
+      // Field yang tidak relevan dikirim undefined, bukan string kosong:
+      // validasi LAN memakai `.trim()` dan host '' akan ditolak dengan benar.
+      host: isLan ? form.host.trim() : undefined,
+      port: isLan ? port : undefined,
+      bluetooth: isLan
+        ? undefined
+        : {
+            deviceId: form.btDeviceId.trim() || undefined,
+            deviceName: form.btDeviceName.trim() || undefined,
+          },
       destinations: form.destinations,
       enabled: form.enabled,
       paperWidthMm: form.paperWidthMm,
@@ -129,7 +152,7 @@ export function PrinterFormScreen() {
           ) : null}
 
           <Card>
-            <SectionTitle>Nama & Alamat</SectionTitle>
+            <SectionTitle>Nama Printer</SectionTitle>
 
             <Text style={styles.label}>Nama printer</Text>
             <TextInput
@@ -140,36 +163,6 @@ export function PrinterFormScreen() {
               placeholderTextColor={Colors.textFaint}
               testID="printer-name"
             />
-
-            <Text style={styles.label}>Alamat IP printer</Text>
-            <TextInput
-              style={styles.input}
-              value={form.host}
-              onChangeText={host => setForm({ ...form, host })}
-              placeholder="192.168.1.50"
-              placeholderTextColor={Colors.textFaint}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="numbers-and-punctuation"
-              testID="printer-host"
-            />
-            <Body muted>
-              Cek di menu printer: cetak test page untuk melihat alamat IP-nya.
-            </Body>
-
-            <Text style={styles.label}>Port</Text>
-            <TextInput
-              style={styles.input}
-              value={form.port}
-              onChangeText={port => setForm({ ...form, port })}
-              placeholder={String(DEFAULT_LAN_PORT)}
-              placeholderTextColor={Colors.textFaint}
-              keyboardType="number-pad"
-              testID="printer-port"
-            />
-            <Body muted>
-              Default 9100. Sebagian printer memakai 9101 atau 515.
-            </Body>
           </Card>
 
           <Card>
@@ -212,23 +205,96 @@ export function PrinterFormScreen() {
 
           <Card>
             <SectionTitle>Jenis Koneksi</SectionTitle>
-            {TRANSPORT_REGISTRY.map(transport => (
-              <View key={transport.type} style={styles.transportRow}>
-                <Text style={styles.transportName}>
-                  {transport.type === 'lan'
+            {TRANSPORT_REGISTRY.filter(t => t.supported).map(transport => (
+              <Toggle
+                key={transport.type}
+                label={
+                  transport.type === 'lan'
                     ? 'LAN (kabel/WiFi)'
-                    : transport.type === 'bluetooth'
-                      ? 'Bluetooth'
-                      : 'USB'}
-                </Text>
-                <Body muted>{transport.reason}</Body>
-              </View>
+                    : 'Bluetooth (BLE)'
+                }
+                value={form.connectionType === transport.type}
+                onChange={() =>
+                  setForm({ ...form, connectionType: transport.type })
+                }
+                testID={`transport-${transport.type}`}
+              />
             ))}
             <Body muted>
-              Fitur ini sengaja hanya menawarkan LAN. Menampilkan tombol
-              Bluetooth atau USB yang selalu gagal hanya membuang waktu kasir.
+              {TRANSPORT_REGISTRY.find(
+                t => t.type === form.connectionType,
+              )?.reason ?? ''}
             </Body>
           </Card>
+
+          {form.connectionType === 'lan' ? (
+            <Card>
+              <SectionTitle>Alamat LAN</SectionTitle>
+
+              <Text style={styles.label}>Alamat IP printer</Text>
+              <TextInput
+                style={styles.input}
+                value={form.host}
+                onChangeText={host => setForm({ ...form, host })}
+                placeholder="192.168.1.50"
+                placeholderTextColor={Colors.textFaint}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="numbers-and-punctuation"
+                testID="printer-host"
+              />
+              <Body muted>
+                Cek di menu printer: cetak test page untuk melihat alamat IP-nya.
+              </Body>
+
+              <Text style={styles.label}>Port</Text>
+              <TextInput
+                style={styles.input}
+                value={form.port}
+                onChangeText={port => setForm({ ...form, port })}
+                placeholder={String(DEFAULT_LAN_PORT)}
+                placeholderTextColor={Colors.textFaint}
+                keyboardType="number-pad"
+                testID="printer-port"
+              />
+              <Body muted>
+                Default 9100. Sebagian printer memakai 9101 atau 515.
+              </Body>
+            </Card>
+          ) : (
+            <Card>
+              <SectionTitle>Alamat Bluetooth</SectionTitle>
+
+              <Text style={styles.label}>Nama perangkat (opsional)</Text>
+              <TextInput
+                style={styles.input}
+                value={form.btDeviceName}
+                onChangeText={btDeviceName => setForm({ ...form, btDeviceName })}
+                placeholder="VSC TM-58V"
+                placeholderTextColor={Colors.textFaint}
+                autoCapitalize="none"
+                autoCorrect={false}
+                testID="printer-bt-name"
+              />
+
+              <Text style={styles.label}>Alamat perangkat (opsional)</Text>
+              <TextInput
+                style={styles.input}
+                value={form.btDeviceId}
+                onChangeText={btDeviceId => setForm({ ...form, btDeviceId })}
+                placeholder="AA:BB:CC:DD:EE:FF"
+                placeholderTextColor={Colors.textFaint}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                testID="printer-bt-id"
+              />
+              <Body muted>
+                Kosongkan kalau tidak yakin — app akan memilih sendiri printer
+                Bluetooth yang sudah dipasangkan. Alamat perangkat terlihat di
+                Pengaturan Bluetooth Android.
+              </Body>
+            </Card>
+          )}
 
           <Button label="Simpan" onPress={submit} testID="save-printer" />
           <Button
@@ -291,11 +357,4 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   toggleLabel: { color: Colors.text, fontSize: FontSize.md },
-  transportRow: { marginBottom: Spacing.md },
-  transportName: {
-    color: Colors.text,
-    fontSize: FontSize.md,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
 });

@@ -120,9 +120,9 @@ it('printResult menyertakan error lengkap saat ada kode error', () => {
 });
 
 // ── Registry transport (PRD §20.18) ────────────────────────────────────────
-it('hanya LAN yang didukung; BLE dan USB jujur dinyatakan tidak didukung', () => {
+it('LAN dan Bluetooth didukung; USB jujur dinyatakan tidak didukung', () => {
   expect(isTransportSupported('lan')).toBe(true);
-  expect(isTransportSupported('bluetooth')).toBe(false);
+  expect(isTransportSupported('bluetooth')).toBe(true);
   expect(isTransportSupported('usb')).toBe(false);
 });
 
@@ -131,5 +131,6 @@ it('setiap entri transport punya alasan yang bisa ditampilkan ke pengguna', () =
   for (const entry of TRANSPORT_REGISTRY) {
     expect(entry.reason.length).toBeGreaterThan(10);
   }
-  expect(transportSupport('bluetooth').reason).toMatch(/Belum didukung/);
+  expect(transportSupport('bluetooth').reason).toMatch(/Bluetooth LE/);
+  expect(transportSupport('usb').reason).toMatch(/Belum didukung/);
 });

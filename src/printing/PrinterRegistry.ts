@@ -1,9 +1,12 @@
 // src/printing/PrinterRegistry.ts
 // Registry jenis koneksi. FUNGSI MURNI.
 //
-// PRD §20.18: Bluetooth/USB TIDAK dibuatkan stub yang berpura-pura jalan.
-// Entri di bawah ini jujur menyatakan "unsupported" supaya UI bisa
-// menyembunyikannya, bukan menampilkan tombol yang selalu gagal.
+// PRD §20.18: USB TIDAK dibuatkan stub yang berpura-pura jalan. Entri di bawah
+// ini jujur menyatakan "unsupported" supaya UI bisa menyembunyikannya, bukan
+// menampilkan tombol yang selalu gagal.
+//
+// Bluetooth didukung lewat BLE/GATT (react-native-ble-plx). Jalur ini port dari
+// Web Bluetooth yang dulu dipakai PWA — lihat bleProfiles.ts.
 
 import type { PrinterConnectionType } from '../types/printing';
 
@@ -22,10 +25,10 @@ export const TRANSPORT_REGISTRY: readonly TransportSupport[] = [
   },
   {
     type: 'bluetooth',
-    supported: false,
+    supported: true,
     reason:
-      'Belum didukung. Firmware printer BLE tidak menerima ESC/POS mentah ' +
-      'dari Android tanpa handshake vendor.',
+      'Didukung lewat Bluetooth LE (GATT). Printer harus sudah dipasangkan ' +
+      '(paired) di Pengaturan Bluetooth Android.',
   },
   {
     type: 'usb',

@@ -16,11 +16,14 @@ import type {
   ReceiptOrder,
 } from '../types/printing';
 import {
+  DEFAULT_BLUETOOTH_CONNECT_TIMEOUT_MS,
+  DEFAULT_BLUETOOTH_WRITE_TIMEOUT_MS,
   DEFAULT_CONNECT_TIMEOUT_MS,
   DEFAULT_WRITE_TIMEOUT_MS,
   PAPER_COLUMNS,
 } from '../types/printing';
 import { buildKitchenTicket } from './KitchenTicketTemplate';
+import { BlePrinterDriver } from './BlePrinterDriver';
 import { LanPrinterDriver } from './LanPrinterDriver';
 import { PrintJobRepository, type CreateJobInput } from './PrintJobRepository';
 import { statusForError } from './PrintJobStateMachine';
@@ -35,10 +38,20 @@ export type TransportFactory = (target: TransportTarget) => PrinterTransport;
 export const lanTransportFactory: TransportFactory = target =>
   new LanPrinterDriver(target);
 
+/** Target BLE = target LAN + blok `bluetooth` printer. */
+export type BleTransportFactory = (
+  target: TransportTarget & { bluetooth?: PrinterConfig['bluetooth'] },
+) => PrinterTransport;
+
+export const bleTransportFactory: BleTransportFactory = target =>
+  new BlePrinterDriver(target);
+
 export type DispatcherDeps = {
   repo: PrintJobRepository;
   getPrinter: (id: string) => Promise<PrinterConfig | null>;
   transportFactory?: TransportFactory;
+  /** Pabrik untuk printer BLE. Kosong = pakai bleTransportFactory. */
+  bleTransportFactory?: BleTransportFactory;
   /** Dipanggil setiap status job berubah — dipakai bridge untuk push notifikasi. */
   onJobStatusChange?: (job: PrintJob) => void;
 };
@@ -52,9 +65,11 @@ export type SubmitInput = {
 
 export class PrintDispatcher {
   private readonly transportFactory: TransportFactory;
+  private readonly bleFactory: BleTransportFactory;
 
   constructor(private readonly deps: DispatcherDeps) {
     this.transportFactory = deps.transportFactory ?? lanTransportFactory;
+    this.bleFactory = deps.bleTransportFactory ?? bleTransportFactory;
   }
 
   /**
@@ -95,7 +110,10 @@ export class PrintDispatcher {
       );
     }
 
-    if (printer.connectionType !== 'lan') {
+    if (
+      printer.connectionType !== 'lan' &&
+      printer.connectionType !== 'bluetooth'
+    ) {
       // PRD §20.18: jangan pura-pura mencoba. Langsung gagal dengan alasan.
       return this.fail(
         job.id,
@@ -112,12 +130,23 @@ export class PrintDispatcher {
       return this.fail(job.id, 'INVALID_CONFIG', message);
     }
 
-    const transport = this.transportFactory({
-      host: printer.host ?? '',
-      port: printer.port ?? 9100,
-      connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS,
-      writeTimeoutMs: DEFAULT_WRITE_TIMEOUT_MS,
-    });
+    const transport =
+      printer.connectionType === 'bluetooth'
+        ? this.bleFactory({
+            // Field LAN tidak dipakai driver BLE, tapi tetap diisi supaya
+            // bentuk target seragam dan log diagnostik sama.
+            host: printer.host ?? '',
+            port: printer.port ?? 9100,
+            connectTimeoutMs: DEFAULT_BLUETOOTH_CONNECT_TIMEOUT_MS,
+            writeTimeoutMs: DEFAULT_BLUETOOTH_WRITE_TIMEOUT_MS,
+            bluetooth: printer.bluetooth,
+          })
+        : this.transportFactory({
+            host: printer.host ?? '',
+            port: printer.port ?? 9100,
+            connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS,
+            writeTimeoutMs: DEFAULT_WRITE_TIMEOUT_MS,
+          });
 
     this.setStatus(job.id, 'connecting');
     const result = await transport.send(bytes);

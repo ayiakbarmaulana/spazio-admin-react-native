@@ -7,7 +7,7 @@
 // sudah ada di sana. Kunci yang ditanam di APK bisa dibongkar siapa pun yang
 // punya file-nya, jadi tidak ada gunanya.
 
-export const DEFAULT_ORIGIN = 'https://spazio.melvapos.com';
+export const DEFAULT_ORIGIN = 'http://localhost:3000';
 
 export type HealthResult = {
   ok: boolean;

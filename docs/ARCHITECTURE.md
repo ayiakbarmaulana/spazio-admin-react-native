@@ -29,6 +29,9 @@
 │                                    ┌───────────▼───────────┐   │
 │                                    │ LanPrinterDriver      │   │
 │                                    │ TCP 9100, timeout ×2  │   │
+│                                    ├───────────────────────┤   │
+│                                    │ BlePrinterDriver      │   │
+│                                    │ GATT, chunk 180→20 B  │   │
 │                                    └───────────┬───────────┘   │
 └────────────────────────────────────────────────┼───────────────┘
                                                  ▼
@@ -48,7 +51,7 @@
 5. Job masuk `PrintQueue` untuk printer itu. Antrean menjamin hanya satu job
    yang menyentuh satu printer pada satu waktu.
 6. Saat gilirannya: `queued → connecting → sending`.
-7. `LanPrinterDriver` membuka socket, mengirim seluruh buffer, menutup socket.
+7. Driver sesuai jenis koneksi membuka jalur, mengirim seluruh buffer, menutup jalur:\n   LanPrinterDriver (socket TCP) atau BlePrinterDriver (GATT, potongan 180→20 byte).
 8. Status akhir:
    - semua byte terkirim, socket ditutup normal → `submitted`
    - gagal sebelum byte pertama → `failed`
@@ -76,5 +79,11 @@ boleh *menunjuk* printer mana yang dipakai. Alamatnya sendiri dibaca dari
 konfigurasi lokal, sehingga halaman yang dibajak tidak bisa mengarahkan cetakan
 ke host lain.
 
-**Bluetooth dan USB tidak dibuatkan stub.** Lihat `PrinterRegistry.ts`. Tombol
+**USB tidak dibuatkan stub.** Lihat `PrinterRegistry.ts`. Tombol
 yang selalu gagal lebih buruk daripada tombol yang tidak ada.
+
+**Bluetooth lewat BLE, bukan SPP.** WebView Android tidak punya
+`navigator.bluetooth`, jadi jalur BLE yang dulu dipakai PWA (Web Bluetooth)
+dipindah ke native memakai `react-native-ble-plx`. Driver-nya port dari
+`spazio-admin/lib/thermal-print.ts` — UUID dan urutan langkahnya sama, supaya
+tidak ada perilaku baru yang perlu ditemukan ulang saat uji di printer asli.

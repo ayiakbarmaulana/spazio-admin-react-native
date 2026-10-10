@@ -14,13 +14,47 @@ selesai. Lihat [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md).
 | Jenis | Status | Alasan |
 | --- | --- | --- |
 | **LAN (TCP)** | ✅ Didukung | Socket TCP mentah ke port 9100. Jalur paling andal: tidak butuh pairing, tidak butuh driver, dan bisa dipakai beberapa perangkat sekaligus. |
-| **Bluetooth (BLE/SPP)** | ❌ Belum didukung | Printer BLE kelas POS umumnya memerlukan handshake vendor sebelum menerima ESC/POS mentah. Implementasinya berbeda per model, jadi tidak bisa dibuat generik. |
+| **Bluetooth (BLE)** | ✅ Didukung | ESC/POS lewat GATT. Port dari Web Bluetooth yang dulu dipakai PWA. Printer harus sudah dipasangkan (paired) di Android. |
 | **USB (OTG)** | ❌ Belum didukung | Butuh driver USB host dan negosiasi endpoint per model printer. |
 | **iOS** | ❌ Belum didukung | Direktori `ios/` masih ada dari template, tapi belum ada jalur cetak yang diimplementasikan. |
 
-Bluetooth dan USB **tidak dibuatkan stub**. Tombol yang selalu gagal lebih
+USB **tidak dibuatkan stub**. Tombol yang selalu gagal lebih
 buruk daripada tombol yang tidak ada: kasir menghabiskan waktu mencoba, lalu
 berhenti mempercayai menu pengaturan.
+
+### Bluetooth LE — cara kerja
+
+Jalur BLE adalah **port dari `spazio-admin/lib/thermal-print.ts`**. PWA dulu
+mencetak lewat Web Bluetooth (`navigator.bluetooth`), yang bekerja di Chrome
+Android tapi **tidak tersedia di WebView** — WebView tidak pernah mendukung Web
+Bluetooth. Karena itu jalur yang sama dipindah ke native lewat
+`react-native-ble-plx`. UUID, urutan langkah, dan ukuran potongan tulis dibiarkan
+identik supaya perilakunya sama dengan yang sudah terbukti jalan di printer
+kasir nyata.
+
+Prasyarat di HP kasir:
+
+1. **Printer harus dipasangkan (paired) dulu** di Pengaturan Bluetooth Android.
+   Aplikasi ini tidak memasangkan printer; kalau pairing gagal di level
+   Android, aplikasi tidak bisa menolong.
+2. Izin `BLUETOOTH_CONNECT` / `BLUETOOTH_SCAN` diberikan saat sistem meminta
+   (Android 12 ke atas). Menolaknya membuat pemindaian gagal dengan
+   `BLUETOOTH_PERMISSION_DENIED`.
+3. Isi **Nama perangkat** atau **Alamat perangkat** di form printer untuk
+   mempercepat pemilihan. Dikosongkan juga boleh: driver akan memilih perangkat
+   terpasang yang namanya cocok dengan pola nama printer umum.
+
+Urutan karakteristik yang dicoba (lihat `src/printing/bleProfiles.ts`):
+
+| Prioritas | UUID | Keterangan |
+| --- | --- | --- |
+| 1 | `49535343-8841-43f4-a8d4-ecbe34729bb3` | RX ISSC Transparent UART — paling umum di printer BLE murah |
+| 2 | UUID dari konfigurasi printer | dipakai lebih dulu kalau diisi |
+| 3 | Karakteristik tulis pertama di layanan kandidat | jalur terakhir sebelum menyerah |
+
+Tulis memakai potongan 180 byte; kalau gagal, offset yang sama diulang dengan
+potongan 20 byte (bukan dari awal — byte yang sudah masuk printer tidak boleh
+terkirim dua kali).
 
 ## Kertas
 

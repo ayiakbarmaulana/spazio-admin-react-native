@@ -12,11 +12,23 @@ import { isTransportSupported } from './PrinterRegistry';
 export type ConfigInput = Pick<
   PrinterConfig,
   'name' | 'connectionType' | 'host' | 'port' | 'destinations'
->;
+> &
+  /** Bluetooth opsional supaya pemanggil lama (tanpa BT) tetap type-check. */
+  Partial<Pick<PrinterConfig, 'bluetooth'>>;
 
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 /** Nama host LAN sederhana, mis. "printer-kasir" atau "epson.local". */
 const HOSTNAME = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9-]+)*$/;
+/** MAC address (id perangkat BLE di Android). */
+const MAC = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
+/** Id perangkat BLE iOS: UUID yang dibuat OS, bukan MAC. */
+const IOS_DEVICE_UUID =
+  /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/;
+
+/** true kalau `deviceId` alamat perangkat BLE yang bentuknya dikenal. */
+export function isValidBluetoothDeviceId(deviceId: string): boolean {
+  return MAC.test(deviceId) || IOS_DEVICE_UUID.test(deviceId);
+}
 
 /** true kalau `host` alamat IPv4 yang sah (setiap oktet 0-255). */
 export function isValidIpv4(host: string): boolean {
@@ -51,7 +63,6 @@ export function validatePrinterConfig(input: ConfigInput): string[] {
       `Jenis koneksi "${input.connectionType}" belum didukung. Gunakan LAN.`,
     );
   }
-
   if (input.destinations.length === 0) {
     errors.push('Pilih minimal satu tujuan cetak (struk atau tiket dapur).');
   }
@@ -72,6 +83,28 @@ export function validatePrinterConfig(input: ConfigInput): string[] {
     const port = input.port ?? DEFAULT_LAN_PORT;
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
       errors.push('Port harus bilangan bulat antara 1 dan 65535.');
+    }
+  }
+
+  if (input.connectionType === 'bluetooth') {
+    const deviceId = input.bluetooth?.deviceId?.trim();
+    // deviceId opsional: kosong = driver memilih printer terpasang sendiri.
+    // Yang wajib hanya bentuknya benar kalau diisi.
+    if (deviceId && !isValidBluetoothDeviceId(deviceId)) {
+      errors.push(
+        `Alamat perangkat Bluetooth tidak sah: ${deviceId}. ` +
+          'Contoh yang benar: AA:BB:CC:DD:EE:FF.',
+      );
+    }
+    // Tujuan dapur butuh printer sendiri; satu printer BLE hanya melayani satu
+    // koneksi — biarkan tetap boleh, tapi jangan pernah kosong.
+    for (const uuid of [
+      input.bluetooth?.serviceUuid,
+      input.bluetooth?.characteristicUuid,
+    ]) {
+      if (uuid !== undefined && uuid.trim() !== '' && !IOS_DEVICE_UUID.test(uuid.trim())) {
+        errors.push(`UUID Bluetooth tidak sah: ${uuid}`);
+      }
     }
   }
 
