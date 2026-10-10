@@ -1,0 +1,247 @@
+// src/printing/ReceiptTemplate.ts
+// Template struk pelanggan. FUNGSI MURNI.
+//
+// Port dari `buildReceipt` di spazio-admin/lib/thermal-print.ts. Perilaku
+// cetak untuk 32 kolom dipertahankan apa adanya; yang berubah hanya sumber
+// lebar kolom (kini parameter, untuk dukung 80mm).
+//
+// ATURAN YANG TIDAK BOLEH DILANGGAR:
+//  - Nominal TIDAK PERNAH dihitung ulang di sini. Semua angka datang dari
+//    objek order (PRD §13.3, §8.4). Renderer hanya memformat.
+//  - Field opsional yang kosong TIDAK dicetak sebagai "Rp 0" — struk tanpa
+//    rincian hanya menampilkan TOTAL.
+
+import {
+  CMD,
+  assemble,
+  feed,
+  padEnd,
+  padStart,
+  rupiah,
+  separator,
+  wrap,
+} from './EscPosRenderer';
+import { isComplimentary, paymentMethodLabel } from './paymentLabel';
+import type { ReceiptOrder } from '../types/printing';
+
+/** Lebar kolom label di blok info transaksi. */
+const INFO_LABEL_WIDTH = 14;
+
+/**
+ * Zona waktu kalender bisnis. Jakarta tanpa DST → offset tetap aman.
+ * Sama dengan JAKARTA_TZ di spazio-admin/lib/jakarta-date.ts.
+ */
+export const JAKARTA_TZ = 'Asia/Jakarta';
+
+function formatJakartaDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('id-ID', { timeZone: JAKARTA_TZ });
+}
+
+function formatJakartaTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('id-ID', {
+    timeZone: JAKARTA_TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * Baris rincian setelah daftar item: subtotal, pajak, service fee, diskon,
+ * sisa tagihan, uang diterima, kembalian.
+ *
+ * Dipisah dari `buildReceipt` supaya bisa diuji sendiri dan supaya blok
+ * "Total & status" tetap terbaca.
+ */
+function buildDetailLines(
+  order: ReceiptOrder,
+  columns: number,
+): (Uint8Array | string)[] {
+  // Tanpa baris Diskon, jumlah baris item tidak pernah sama dengan TOTAL, dan
+  // struknya tidak menjelaskan selisihnya ke mana.
+  const detail: [string, string][] = [];
+  if (typeof order.subTotalAmount === 'number') {
+    detail.push(['Subtotal', rupiah(order.subTotalAmount)]);
+  }
+  if (typeof order.taxAmount === 'number') {
+    detail.push(['Pajak PPN', rupiah(order.taxAmount)]);
+  }
+  if (typeof order.serviceFeeAmount === 'number') {
+    detail.push(['Service Fee', rupiah(order.serviceFeeAmount)]);
+  }
+  if (order.discountAmount && order.discountAmount > 0) {
+    // Order gratis: nominal penuh digratiskan. Tanpa label sendiri, struk
+    // gratis terbaca seperti order berdiskon voucher.
+    const discountLabel = isComplimentary(order.paymentMethod)
+      ? 'Komplimen (Gratis)'
+      : order.voucherTitle
+        ? `Diskon ${order.voucherTitle}`
+        : 'Diskon Voucher';
+    detail.push([discountLabel, `-${rupiah(order.discountAmount)}`]);
+  }
+
+  // Bill belum lunas yang sudah menerima uang: tanpa dua baris ini, TOTAL
+  // (nominal penuh) terbaca seolah semuanya sudah dibayar.
+  const paidAmount = order.paidAmount ?? 0;
+  // Order batal: uangnya sudah dikembalikan → tidak ada "sisa tagihan".
+  if (
+    order.status !== 'CANCELLED' &&
+    order.paymentStatus !== 'PAID' &&
+    paidAmount > 0
+  ) {
+    detail.push(['Sudah Dibayar', `-${rupiah(paidAmount)}`]);
+    detail.push(['SISA TAGIHAN', rupiah(order.finalAmount - paidAmount)]);
+  }
+
+  // Uang diterima kasir. Tanpa ini, kasir yang menerima 100rb untuk tagihan
+  // 48rb tidak punya bukti kembaliannya 52rb di struk.
+  if (order.receivedAmount != null) {
+    detail.push(['Uang Diterima', rupiah(order.receivedAmount)]);
+    const change = Math.round(order.changeAmount ?? 0);
+    // Kembalian 0 cuma jadi noise.
+    if (change > 0) {
+      detail.push(['Kembalian', rupiah(change)]);
+    }
+  }
+
+  const out: (Uint8Array | string)[] = [separator(columns), CMD.LF];
+  for (const [label, value] of detail) {
+    // Kolom label = columns - 12, nominal rata kanan 12 (muat tanda minus).
+    const labelLines = wrap(label, columns - 12);
+    out.push(
+      padEnd(labelLines[0], columns - 12),
+      padStart(value, 12),
+      CMD.LF,
+    );
+    // Judul voucher panjang turun ke baris sendiri supaya nominalnya tidak
+    // ikut terpotong.
+    for (const rest of labelLines.slice(1)) {
+      out.push(padEnd(rest, columns), CMD.LF);
+    }
+  }
+  return out;
+}
+
+/**
+ * Bangun byte struk pelanggan.
+ *
+ * @param order   data order — nominal dipakai apa adanya.
+ * @param columns lebar kolom teks (32 untuk 58mm, 48 untuk 80mm).
+ * @param label   label salinan opsional ("CUSTOMER", "MANAGEMENT").
+ */
+export function buildReceipt(
+  order: ReceiptOrder,
+  columns: number,
+  label?: string,
+): Uint8Array {
+  const parts: (Uint8Array | string)[] = [
+    CMD.INIT,
+    CMD.ALIGN_C,
+    CMD.BOLD_ON,
+    'SPAZIO',
+    CMD.BOLD_OFF,
+    CMD.LF,
+    'Invoice Penjualan',
+    CMD.LF,
+  ];
+  if (label) {
+    parts.push(CMD.BOLD_ON, label, CMD.BOLD_OFF, CMD.LF);
+  }
+
+  // ── Info transaksi ────────────────────────────────────────────────────────
+  const rows: [string, string][] = [
+    ['No. Receipt', order.noreceipt ?? '-'],
+    ['Tanggal', formatJakartaDate(order.createdAt)],
+    ['Jam', formatJakartaTime(order.createdAt)],
+    ['Kasir', order.staffName ?? '-'],
+  ];
+  if (order.customerName) {
+    rows.push(['Pelanggan', order.customerName]);
+  }
+  if (order.customerPhone) {
+    rows.push(['Telp', order.customerPhone]);
+  }
+  if (order.customerAddress) {
+    rows.push(['Alamat', order.customerAddress]);
+  }
+  if (order.tableNumber) {
+    rows.push(['Meja', order.tableNumber]);
+  }
+  if (order.note) {
+    rows.push(['Catatan', order.note]);
+  }
+  rows.push(['Bayar', paymentMethodLabel(order.paymentMethod)]);
+
+  // Indent lanjutan = lebar label + 1 spasi pemisah.
+  const valueWidth = columns - INFO_LABEL_WIDTH - 1;
+
+  parts.push(CMD.ALIGN_L, CMD.LF);
+  for (const [key, raw] of rows) {
+    const labelCol = padStart(key, INFO_LABEL_WIDTH);
+    const value = raw && raw.trim() ? raw : '-';
+    // Nilai panjang (mis. alamat) dibungkus ke baris lanjutan, bukan dipotong.
+    wrap(value, valueWidth).forEach((line, i) => {
+      parts.push(
+        i === 0
+          ? `${labelCol} ${line}`
+          : `${' '.repeat(INFO_LABEL_WIDTH + 1)}${line}`,
+        CMD.LF,
+      );
+    });
+  }
+
+  // ── Item ──────────────────────────────────────────────────────────────────
+  parts.push(
+    separator(columns),
+    CMD.LF,
+    'ITEM',
+    CMD.LF,
+    separator(columns),
+    CMD.LF,
+  );
+  for (const item of order.items) {
+    const qtyPrice = `${item.quantity} x ${rupiah(item.priceAtOrder)}`;
+    const subtotal = rupiah(item.priceAtOrder * item.quantity);
+    for (const line of wrap(item.menuName, columns)) {
+      parts.push(padEnd(line, columns), CMD.LF);
+    }
+    // Catatan item mengekor item-nya. Item tanpa catatan tidak mencetak apa pun
+    // (jangan sampai muncul baris "* null" yang bikin dapur bingung).
+    if (item.note) {
+      for (const line of wrap(`  * ${item.note}`, columns)) {
+        parts.push(padEnd(line, columns), CMD.LF);
+      }
+    }
+    parts.push(padEnd(qtyPrice, columns - 11), padStart(subtotal, 11), CMD.LF);
+  }
+
+  parts.push(...buildDetailLines(order, columns));
+
+  // ── Total & status ────────────────────────────────────────────────────────
+  parts.push(
+    CMD.BOLD_ON,
+    padEnd('TOTAL', columns - 11),
+    padStart(rupiah(order.finalAmount), 11),
+    CMD.BOLD_OFF,
+    CMD.LF,
+    CMD.LF,
+    CMD.ALIGN_C,
+    CMD.BOLD_ON,
+    order.status === 'CANCELLED'
+      ? 'DIBATALKAN'
+      : order.paymentStatus === 'PAID'
+        ? 'LUNAS'
+        : 'BELUM DIBAYAR',
+    CMD.BOLD_OFF,
+    CMD.LF,
+    ...(isComplimentary(order.paymentMethod)
+      ? (['GRATIS', CMD.LF] as (Uint8Array | string)[])
+      : []),
+    CMD.LF,
+    'Terima kasih!',
+    CMD.LF,
+    feed(3),
+    CMD.CUT,
+  );
+
+  return assemble(parts);
+}
