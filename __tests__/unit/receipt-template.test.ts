@@ -33,6 +33,21 @@ function lines(text: string): string[] {
   return text.split('\n');
 }
 
+/** Posisi byte pertama urutan `needle` di `haystack`. -1 kalau tidak ada. */
+function indexOfBytes(haystack: Uint8Array, needle: Uint8Array): number {
+  for (let i = 0; i + needle.length <= haystack.length; i++) {
+    let matched = true;
+    for (let k = 0; k < needle.length; k++) {
+      if (haystack[i + k] !== needle[k]) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) return i;
+  }
+  return -1;
+}
+
 /** Setiap baris struk harus muat lebar kertas. */
 function expectWidth(text: string, columns: number, label = 'struk') {
   for (const line of lines(text)) {
@@ -365,3 +380,31 @@ it('PASS 18: nominal besar tetap rata kanan dalam 11 kolom', () => {
   expect(text).toContain('Rp 12.345.678');
   expectWidth(text, W, 'nominal besar');
 });
+
+// ── 19. Nomor antrian menonjol: blok tebal, rata tengah, baris sendiri ─────
+it('PASS 19: noreceipt pola antrian mencetak blok "Antrian #N"', () => {
+  const order: ReceiptOrder = { ...base, noreceipt: 'INV-20261011-7' };
+  const bytes = buildReceipt(order, W, 'INVOICE');
+  const text = render(bytes);
+
+  expect(text).toContain('Antrian #7');
+  // Nomor hanya diambil dari noreceipt — tidak dihitung ulang dari tanggal.
+  const rows = text.split('\n');
+  const idx = rows.indexOf('Antrian #7');
+  expect(idx).toBeGreaterThan(0);
+  expect(rows[idx - 1]).toBe('-'.repeat(W));
+  expect(rows[idx + 1]).toBe('-'.repeat(W));
+  // Rata tengah di antara dua garis: perintah ALIGN_C langsung sebelum BOLD_ON.
+  const needle = Uint8Array.of(0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01);
+  expect(indexOfBytes(bytes, needle)).toBeGreaterThan(-1);
+  expectWidth(text, W, 'struk berantrian');
+});
+
+// ── 20. Tanpa pola antrian: blok hilang, bukan placeholder ─────────────────
+it('PASS 20: noreceipt non-pola tidak mencetak blok antrian', () => {
+  const text = render(buildReceipt({ ...base, noreceipt: 'SPZ-001' }, W));
+  expect(text).not.toContain('Antrian');
+  // guard agar regex nomor tidak pernah menganggap id pendek sebagai nomor
+  expect(text).not.toContain('Antrian #1');
+});
+

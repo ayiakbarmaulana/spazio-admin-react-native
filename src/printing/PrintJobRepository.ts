@@ -57,6 +57,17 @@ export type CreateJobInput = {
   payload: ReceiptOrder | KitchenTicketOrder;
 };
 
+/**
+ * Boleh diulang dari POS tanpa konfirmasi tambahan?
+ *
+ * `failed`/`cancelled` = tidak ada byte yang keluar (atau dibatalkan sebelum
+ * kirim) → aman diulang. `submitted`/`unknown` sengaja TIDAK boleh: struk
+ * mungkin sudah tercetak, dan mengulangnya bikin struk dobel.
+ */
+function isRetryable(status: PrintJobStatus): boolean {
+  return status === 'failed' || status === 'cancelled';
+}
+
 export class PrintJobRepository {
   private readonly db: Database;
 
@@ -71,11 +82,19 @@ export class PrintJobRepository {
    *
    * `created` membedakan "job baru" dari "sudah pernah dibuat" supaya caller
    * tidak mengantre dua kali untuk order yang sama.
+   *
+   * PENTING: dedup hanya berlaku selama job pendahulunya masih berarti.
+   * Job yang sudah `failed`/`cancelled` boleh diulang — kalau tidak, order
+   * yang struknya gagal (kertas habis, printer mati) terkunci selamanya di
+   * kunci idempotency yang sama dan kasir tidak punya cara mencetak ulang
+   * dari POS. `submitted` TIDAK boleh diulang (struk sudah keluar), dan
+   * `unknown` TIDAK boleh diulang otomatis (printer mungkin sudah mencetak) —
+   * keduanya harus lewat layar Riwayat Cetak dengan konfirmasi kasir.
    */
   createOrGet(input: CreateJobInput): { job: PrintJob; created: boolean } {
     const key = printJobKey(input.orderId, input.destination, input.printerId);
     const existing = this.findByIdempotencyKey(key);
-    if (existing) {
+    if (existing && !isRetryable(existing.status)) {
       return { job: existing, created: false };
     }
 
@@ -88,7 +107,13 @@ export class PrintJobRepository {
       status: 'queued',
       payload: input.payload,
       attemptCount: 0,
-      idempotencyKey: key,
+      // Percobaan ulang memakai kunci turunan supaya baris job lama (dan
+      // riwayat kegagalannya) tetap ada, tanpa melanggar indeks unik di
+      // idempotency_key.
+      idempotencyKey:
+        existing && isRetryable(existing.status)
+          ? `${key}::retry-${newId('r')}`
+          : key,
       lastError: null,
       createdAt: now,
       updatedAt: now,
@@ -188,6 +213,14 @@ export class PrintJobRepository {
         incrementAttempt ? 1 : 0,
         id,
       ],
+    );
+  }
+
+  /** Alihkan job ke printer lain — dipakai saat cetak ulang job tanpa printer. */
+  updatePrinterId(id: string, printerId: string): void {
+    this.db.execute(
+      'UPDATE print_jobs SET printer_id = ?, updated_at = ? WHERE id = ?;',
+      [printerId, new Date().toISOString(), id],
     );
   }
 

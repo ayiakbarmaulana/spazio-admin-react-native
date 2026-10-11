@@ -145,20 +145,24 @@ export class BridgeHandler {
     const printerId =
       payload.printerId ??
       (await this.deps.findPrinterForDestination(payload.destination))?.id;
-    if (!printerId) {
-      return errorResponse(
-        request.requestId,
-        'NO_PRINTER',
-        'Tidak ada printer yang aktif untuk tujuan ini.',
-      );
-    }
 
-    const { job, created } = this.deps.dispatcher.submit({
-      orderId: payload.orderId,
-      destination: payload.destination,
-      printerId,
-      payload: payload.order as never,
-    });
+    // Tanpa printer: JANGAN menolak sebelum menyimpan. Tiket dapur yang hilang
+    // tanpa jejak adalah bug yang mahal — kasir tidak melihat apa pun di
+    // Riwayat Cetak dan struk pelanggan tetap tercetak seolah semuanya normal.
+    // Kita catat job-nya sebagai gagal (NO_PRINTER) supaya muncul + bisa
+    // dicetak ulang setelah printer didaftarkan.
+    const { job, created } = printerId
+      ? this.deps.dispatcher.submit({
+          orderId: payload.orderId,
+          destination: payload.destination,
+          printerId,
+          payload: payload.order as never,
+        })
+      : this.deps.dispatcher.submitUnroutable({
+          orderId: payload.orderId,
+          destination: payload.destination,
+          payload: payload.order as never,
+        });
 
     return okResponse(request.requestId, {
       jobId: job.id,
@@ -166,6 +170,9 @@ export class BridgeHandler {
       // created=false artinya order ini memang sudah pernah dikirim — WebView
       // bisa membedakan double-tap dari permintaan baru.
       duplicate: !created,
+      // Tanpa printer, job-nya PASTI gagal. Beri tahu WebView supaya tidak
+      // menampilkan toast sukses.
+      queued: Boolean(printerId) && created,
       notice: CONNECTION_NOT_PRINTED_NOTICE,
     });
   }

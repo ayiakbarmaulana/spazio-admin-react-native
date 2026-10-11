@@ -10,6 +10,7 @@
 
 import { FakeDatabase } from '../helpers/fakeDatabase';
 import { PrintDispatcher } from '../../src/printing/PrintDispatcher';
+import type { DispatcherDeps } from '../../src/printing/PrintDispatcher';
 import { PrintJobRepository } from '../../src/printing/PrintJobRepository';
 import type {
   PrinterTransport,
@@ -82,13 +83,19 @@ function flush(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0));
 }
 
-function setup(printer: PrinterConfig | null = printerConfig()) {
+function setup(
+  printer: PrinterConfig | null = printerConfig(),
+  findPrinterForDestination: DispatcherDeps['findPrinterForDestination'] = undefined,
+) {
   const db = new FakeDatabase();
   const repo = new PrintJobRepository(db);
   const changes: string[] = [];
   const dispatcher = new PrintDispatcher({
     repo,
-    getPrinter: async () => printer,
+    // Hormati id yang diminta supaya cetak ulang ke printer yang baru
+    // didaftarkan benar-benar diuji.
+    getPrinter: async id => (printer && printer.id === id ? printer : null),
+    findPrinterForDestination,
     transportFactory: target => new FakeTransport(target),
     onJobStatusChange: job => changes.push(job.status),
   });
@@ -143,6 +150,145 @@ it('order yang sama tidak menghasilkan job kedua (dedup idempotency)', async () 
   await flush();
   // Hanya satu kali kirim meski submit dipanggil dua kali (double-tap kasir).
   expect(FakeTransport.sent).toHaveLength(1);
+});
+
+it('job GAGAL boleh dicetak ulang dari web — bukan diblokir dedup selamanya', async () => {
+  const { repo, dispatcher } = setup();
+  FakeTransport.result = {
+    ok: false,
+    error: {
+      code: 'CONNECTION_REFUSED',
+      message: 'Printer menolak koneksi. Cek port.',
+      transmissionStarted: false,
+      at: '2026-09-27T10:00:05Z',
+    },
+  };
+
+  const first = dispatcher.submit({
+    orderId: 'ord-1',
+    destination: 'customer_receipt',
+    printerId: 'prn-1',
+    payload: order,
+  });
+  await flush();
+  expect(repo.findById(first.job.id)?.status).toBe('failed');
+
+  // Ini kasus nyata: kertas habis / printer mati saat cetak pertama. Kasir
+  // memperbaiki printer lalu mencetak lagi. Dulu percobaan kedua balik dengan
+  // ack "sukses" untuk job gagal yang tidak pernah diantre ulang.
+  FakeTransport.result = { ok: true };
+  const second = dispatcher.submit({
+    orderId: 'ord-1',
+    destination: 'customer_receipt',
+    printerId: 'prn-1',
+    payload: order,
+  });
+
+  expect(second.created).toBe(true);
+  expect(second.job.id).not.toBe(first.job.id);
+
+  await flush();
+  expect(repo.findById(second.job.id)?.status).toBe('submitted');
+  // Riwayat menyimpan kedua percobaan — kegagalan tidak dihapus.
+  expect(repo.findRecent()).toHaveLength(2);
+});
+
+it('job SUBMITTED tetap diblokir dedup — tidak boleh bikin struk dobel', async () => {
+  const { dispatcher } = setup();
+
+  const first = dispatcher.submit({
+    orderId: 'ord-1',
+    destination: 'customer_receipt',
+    printerId: 'prn-1',
+    payload: order,
+  });
+  await flush();
+
+  const second = dispatcher.submit({
+    orderId: 'ord-1',
+    destination: 'customer_receipt',
+    printerId: 'prn-1',
+    payload: order,
+  });
+
+  expect(second.created).toBe(false);
+  expect(second.job.id).toBe(first.job.id);
+  await flush();
+  expect(FakeTransport.sent).toHaveLength(1);
+});
+
+it('job UNKNOWN tidak diulang otomatis — printer mungkin sudah mencetak', async () => {
+  const { repo, dispatcher } = setup();
+  FakeTransport.result = {
+    ok: false,
+    error: {
+      code: 'CONNECTION_RESET',
+      message: 'Koneksi ke printer terputus.',
+      transmissionStarted: true,
+      at: '2026-09-27T10:00:05Z',
+    },
+  };
+
+  const first = dispatcher.submit({
+    orderId: 'ord-1',
+    destination: 'customer_receipt',
+    printerId: 'prn-1',
+    payload: order,
+  });
+  await flush();
+  expect(repo.findById(first.job.id)?.status).toBe('unknown');
+
+  const second = dispatcher.submit({
+    orderId: 'ord-1',
+    destination: 'customer_receipt',
+    printerId: 'prn-1',
+    payload: order,
+  });
+
+  // Harus lewat Riwayat Cetak dengan konfirmasi kasir, bukan auto-retry.
+  expect(second.created).toBe(false);
+  expect(second.job.id).toBe(first.job.id);
+});
+
+it('tanpa printer: job TETAP tercatat sebagai gagal (tidak hilang bisu)', async () => {
+  const { repo, dispatcher } = setup();
+
+  const { job } = dispatcher.submitUnroutable({
+    orderId: 'ord-1',
+    destination: 'kitchen_ticket',
+    payload: order,
+  });
+  await flush();
+
+  const stored = repo.findById(job.id);
+  expect(stored?.status).toBe('failed');
+  expect(stored?.lastError?.code).toBe('NO_PRINTER');
+  expect(stored?.printerId).toBe('unconfigured');
+});
+
+it('cetak ulang job tanpa printer menunjuk ke printer yang baru didaftarkan', async () => {
+  const kitchenPrinter = printerConfig({
+    id: 'prn-kitchen',
+    destinations: ['kitchen_ticket'],
+  });
+  const { repo, dispatcher } = setup(kitchenPrinter, async () => kitchenPrinter);
+
+  const { job } = dispatcher.submitUnroutable({
+    orderId: 'ord-1',
+    destination: 'kitchen_ticket',
+    payload: order,
+  });
+  await flush();
+  expect(repo.findById(job.id)?.status).toBe('failed');
+  expect(repo.findById(job.id)?.printerId).toBe('unconfigured');
+
+  // Kasir mendaftarkan printer dapur SETELAH job gagal, lalu menekan Cetak
+  // Ulang. Tanpa pengalihan printer, job ini akan gagal NO_PRINTER selamanya.
+  await dispatcher.reprint(job.id);
+
+  const stored = repo.findById(job.id);
+  expect(stored?.printerId).toBe('prn-kitchen');
+  expect(stored?.status).toBe('submitted');
 });
 
 it('pengiriman sukses → status submitted, byte berisi ESC/POS struk', async () => {

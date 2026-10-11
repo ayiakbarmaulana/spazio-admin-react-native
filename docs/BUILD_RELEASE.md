@@ -199,12 +199,21 @@ pada kunci `assets`):
 | File | Fungsi | Saran ukuran |
 | --- | --- | --- |
 | `icon.png` | Ikon aplikasi (Android < 8 dan ikon legacy) | 1024×1024 PNG, opak |
-| `icon-foreground.png` | Lapisan depan adaptive icon (Android 8+) | 1024×1024 PNG, transparan, logo ≤ 60% kanvas |
+| `icon-foreground.png` | Lapisan depan adaptive icon (Android 8+) | 1024×1024 PNG, transparan, logo di dalam 66% area tengah |
 | `splash.png` | Logo layar pembuka | 1024×1024 PNG, transparan |
 
+Seluruh sumber tidak wajib persegi — generator memuatnya utuh (`fit: contain`),
+jadi wordmark lebar pun tidak terpotong. Tapi ikon launcher Android dirancang
+untuk bentuk persegi: wordmark akan tampak sebagai pita tipis di tengah ikon.
+Untuk ikon yang mengisi penuh, siapkan mark persegi (logo tanpa teks).
+
 `icon-foreground.png` bersifat opsional: kalau tidak ada, `icon.png` dipakai
-sebagai foreground (akan terlihat terpotong pada launcher yang memakai mask
-bulat, jadi sebaiknya tetap disiapkan).
+sebagai foreground dengan lebar 72% kanvas (78 dp dari 108 dp). Itu kompromi —
+cukup besar untuk terbaca, tapi launcher yang mask-nya bulat penuh akan
+memotong sedikit ujung kiri/kanan.
+
+Foreground digenerate **apa adanya** dari file sumber — skrip tidak mengubah
+warna tinta. Yang perlu dijaga cuma kontras terhadap latar.
 
 Warna latar ikon dan layar pembuka diatur lewat `assets.iconBackground` dan
 `assets.splashBackground` di `app.json` (format `#RRGGBB`).
@@ -223,6 +232,25 @@ Skrip menulis:
 - `mipmap-anydpi-v26/ic_launcher.xml` + `ic_launcher_round.xml` — adaptive icon
 - `drawable-nodpi/splash_logo.png` — logo layar pembuka 512 px
 - `values/colors.xml` — warna latar ikon dan layar pembuka
+
+### Ukuran px per kepadatan
+
+Angka resmi Android. Generator mengurus semuanya — tabel ini hanya untuk
+verifikasi kalau ada yang aneh.
+
+| Kepadatan | Legacy (48 dp) | Adaptive foreground (108 dp) | Zona aman (66 dp) |
+| --- | --- | --- | --- |
+| mdpi (1×) | 48×48 | 108×108 | 66×66 |
+| hdpi (1,5×) | 72×72 | 162×162 | 99×99 |
+| xhdpi (2×) | 96×96 | 216×216 | 132×132 |
+| xxhdpi (3×) | 144×144 | 324×324 | 198×198 |
+| xxxhdpi (4×) | 192×192 | 432×432 | 264×264 |
+
+Kenapa kanvas 108 dp lebih besar dari yang kelihatan: launcher modern
+**memotong** ikon mengikuti bentuknya (bulat, squircle, kotak, teardrop).
+Dari 108 dp, hanya sekitar 66 dp yang dijamin tetap terlihat di semua bentuk.
+Sisanya (108 − 66 = 42 dp) adalah margin wajib; kalau logo mengisi penuh
+kanvas, sudutnya akan terpotong.
 
 File-file itu **hasil generate**; perubahannya akan hilang tiap kali skrip
 dijalankan. Kalau butuh perubahan permanen, ubah `app.json` atau

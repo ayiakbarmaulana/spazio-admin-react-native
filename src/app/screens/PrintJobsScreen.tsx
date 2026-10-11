@@ -64,7 +64,9 @@ export function PrintJobsScreen() {
       {
         text: 'Cetak Ulang',
         onPress: () => {
-          void dispatcher.run(job.id).then(reload);
+          // reprint() (bukan run()) supaya job yang dulu gagal karena belum
+          // ada printer menunjuk ke printer yang baru didaftarkan.
+          void dispatcher.reprint(job.id).then(reload);
         },
       },
     ]);

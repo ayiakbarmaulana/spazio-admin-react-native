@@ -4,7 +4,7 @@
   "assets": {
     "icon": "./assets/icon.png",
     "iconForeground": "./assets/icon-foreground.png",
-    "iconBackground": "#BF4847",
+    "iconBackground": "#FFFFFF",
     "splash": "./assets/splash.png",
     "splashBackground": "#FFFFFF"
   }

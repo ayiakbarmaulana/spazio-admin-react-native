@@ -182,9 +182,17 @@ it('PRINT_REQUEST tanpa printerId ditolak NO_PRINTER kalau tak ada printer untuk
     }),
   );
 
-  expect(response.ok).toBe(false);
-  expect(response.error?.code).toBe('NO_PRINTER');
-  expect(repo.findRecent()).toHaveLength(0);
+  // Tanpa printer, permintaan TETAP diterima dan dicatat sebagai job gagal.
+  // Tiket/struk yang hilang tanpa jejak tidak boleh terjadi: kasir harus
+  // melihatnya di Riwayat Cetak dan bisa mencetak ulang setelah mendaftarkan
+  // printer.
+  expect(response.ok).toBe(true);
+  expect((response.data as { queued?: boolean })?.queued).toBe(false);
+
+  const recent = repo.findRecent();
+  expect(recent).toHaveLength(1);
+  expect(recent[0].status).toBe('failed');
+  expect(recent[0].lastError?.code).toBe('NO_PRINTER');
 });
 
 it('PRINT_REQUEST tanpa printerId mengabaikan printer nonaktif', async () => {
@@ -198,9 +206,12 @@ it('PRINT_REQUEST tanpa printerId mengabaikan printer nonaktif', async () => {
     }),
   );
 
-  expect(response.ok).toBe(false);
-  expect(response.error?.code).toBe('NO_PRINTER');
-  expect(repo.findRecent()).toHaveLength(0);
+  expect(response.ok).toBe(true);
+  expect((response.data as { queued?: boolean })?.queued).toBe(false);
+
+  const recent = repo.findRecent();
+  expect(recent).toHaveLength(1);
+  expect(recent[0].lastError?.code).toBe('NO_PRINTER');
 });
 
 it('PRINT_REQUEST dengan payload cacat ditolak, tanpa membuat job', async () => {

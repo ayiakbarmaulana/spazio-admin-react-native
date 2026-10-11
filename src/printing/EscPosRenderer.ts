@@ -6,7 +6,8 @@
 // printer 80mm (48 kolom) didukung, bukan hanya 58mm (32 kolom).
 //
 // Keluaran untuk 32 kolom WAJIB byte-identik dengan implementasi web lama —
-// dijaga oleh __tests__/unit/escpos-fixture.test.ts.
+// dijaga oleh __tests__/unit/escpos-fixture.test.ts (golden dari
+// spazio-admin/lib/thermal-print.ts).
 
 /** RUJUKAN: definisi command ESC/POS yang dipakai. */
 const ESC = 0x1b;

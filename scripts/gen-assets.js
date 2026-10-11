@@ -10,8 +10,16 @@
  *
  * File sumber yang diperlukan (lihat app.json untuk path persisnya):
  *   icon.png            ikon legacy (dipakai Android < 8 / API < 26)
- *   icon-foreground.png lapisan depan adaptive icon (Android 8+)
+ *   icon-foreground.png lapisan depan adaptive icon (Android 8+). Opsional —
+ *                       kalau tidak ada, icon.png yang dipakai sebagai gantinya.
+ *                       Untuk hasil terbaik: 1024x1024, transparan, logo
+ *                       di dalam 66% area tengah (zona aman 66dp dari 108dp).
  *   splash.png          logo layar pembuka
+ *
+ * File sumber tidak perlu persegi 1:1 — skrip memuatnya utuh (fit contain),
+ * jadi wordmark lebar pun tidak terpotong. Tapi ikon launcher Android
+ * memang dirancang untuk bentuk persegi; wordmark akan tampak sebagai pita
+ * tipis di tengah ikon.
  *
  * Kalau salah satu file belum ada, skrip memberi tahu dan melewatinya —
  * bukan gagal. Jadi kamu bisa menyiapkan asset satu per satu.
@@ -35,7 +43,7 @@ const DENSITIES = [
   { dir: 'mipmap-xxxhdpi', scale: 4 },
 ];
 
-/** Adaptive icon resmi memakai kanvas 108dp dengan 72dp aman di tengah. */
+/** Adaptive icon resmi: kanvas 108dp, zona aman 66dp di tengah. */
 const ICON_DP = 48;
 const FOREGROUND_DP = 108;
 
@@ -56,6 +64,19 @@ function info(msg) {
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
+}
+
+/** '#RRGGBB' -> objek RGBA sharp. Fallback putih kalau format tidak dikenali. */
+function hexToRgba(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+  if (!m) return { r: 255, g: 255, b: 255, alpha: 1 };
+  const h = m[1];
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+    alpha: 1,
+  };
 }
 
 function resolveAsset(key) {
@@ -94,7 +115,13 @@ async function writeMipmaps(src, baseName, dp, opts = {}) {
     ensureDir(outDir);
 
     const logo = await sharp(src, { density: 300 })
-      .resize(inner, inner, { fit, position: 'centre' })
+      .resize(inner, inner, {
+        fit,
+        position: 'centre',
+        // Tanpa background eksplisit, sharp mengisi margin 'contain' dengan
+        // piksel premultiplied ber-alpha kecil, bukan transparan penuh.
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
       .ensureAlpha()
       .png()
       .toBuffer();
@@ -146,8 +173,8 @@ async function writeSplash(src) {
 
 /**
  * Adaptive icon (Android 8+). Foreground digambar pada kanvas 108dp,
- * isi 72dp aman di tengah — jadi logo tidak terpotong saat launcher
- * menerapkan mask bulat/squircle.
+ * isi wajib di dalam zona aman 66dp di tengah — supaya logo tidak terpotong
+ * saat launcher menerapkan mask bulat/squircle.
  */
 function writeAdaptiveIcon() {
   const dir = path.join(RES, 'mipmap-anydpi-v26');
@@ -200,8 +227,20 @@ async function main() {
 
   const icon = resolveAsset('icon');
   if (icon) {
-    await writeMipmaps(icon, 'ic_launcher', ICON_DP, null);
-    await writeMipmaps(icon, 'ic_launcher_round', ICON_DP, 'circle');
+    const bg = hexToRgba(cfg.iconBackground || '#FFFFFF');
+    // Wordmark lebar: contain + padding supaya utuh, latar warna brand
+    // menggantikan ruang kosong yang tadinya putih polos.
+    await writeMipmaps(icon, 'ic_launcher', ICON_DP, {
+      fit: 'contain',
+      padding: 0.86,
+      background: bg,
+    });
+    await writeMipmaps(icon, 'ic_launcher_round', ICON_DP, {
+      fit: 'contain',
+      padding: 0.80,
+      background: bg,
+      mask: 'circle',
+    });
     didWork = true;
   }
 
@@ -209,9 +248,17 @@ async function main() {
   const foregroundSrc = fg || icon;
   if (foregroundSrc) {
     if (!fg && icon) {
-      warn('icon-foreground.png tidak ada — memakai icon.png sebagai foreground.');
+      info('icon-foreground.png tidak ada — memakai icon.png sebagai foreground.');
     }
-    await writeMipmaps(foregroundSrc, 'ic_launcher_foreground', FOREGROUND_DP, null);
+    // 0.72 = lebar logo 78dp dari kanvas 108dp. Kompromi: cukup besar untuk
+    // terbaca, tapi masih utuh di mask squircle/rounded-square. Launcher
+    // dengan mask bulat penuh akan memotong sedikit ujung kiri/kanan.
+    // Foreground pakai warna asli dari assets/icon.png (tanpa recolor),
+    // di atas latar putih tetap: kontras tinta merah sudah cukup.
+    await writeMipmaps(foregroundSrc, 'ic_launcher_foreground', FOREGROUND_DP, {
+      fit: 'contain',
+      padding: 0.72,
+    });
     didWork = true;
   }
 

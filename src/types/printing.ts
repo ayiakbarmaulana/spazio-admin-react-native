@@ -102,6 +102,12 @@ export type PrintErrorCode =
    * Tidak bisa diperbaiki dari aplikasi — wajib pasang ulang APK.
    */
   | 'PRINTING_MODULE_MISSING'
+  /**
+   * Belum ada printer yang dikonfigurasi untuk tujuan ini (mis. tiket dapur
+   * saat printer dapur belum didaftarkan). Dicatat sebagai job gagal supaya
+   * kelihatan di Riwayat Cetak, bukan hilang diam-diam.
+   */
+  | 'NO_PRINTER'
   | 'UNKNOWN_TRANSPORT_ERROR';
 
 export type PrintJobError = {
@@ -214,8 +220,9 @@ export type PrintJob = {
 
 /**
  * Kolom teks untuk font A. 58mm = 32 kolom, 80mm = 48 kolom.
- * Nilai ini adalah bagian dari kontrak byte — jangan diubah tanpa
- * memperbarui fixture byte di __tests__/unit/escpos-renderer.test.ts.
+ * Nilai ini adalah bagian dari kontrak byte — 32 kolom dijaga byte-identik
+ * dengan web oleh __tests__/unit/escpos-fixture.test.ts. Jangan diubah tanpa
+ * memperbarui fixture di sana.
  */
 export const PAPER_COLUMNS: Record<PaperWidthMm, number> = {
   58: 32,

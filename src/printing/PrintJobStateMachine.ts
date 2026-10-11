@@ -102,6 +102,9 @@ const ERROR_MESSAGES: Record<PrintErrorCode, string> = {
   PRINTING_MODULE_MISSING:
     'Aplikasi ini tidak memuat modul Bluetooth. Pasang ulang (install ulang) ' +
     'aplikasi versi terbaru, lalu coba lagi.',
+  NO_PRINTER:
+    'Belum ada printer yang didaftarkan untuk tujuan ini. Buka Pengaturan ' +
+    'Printer di aplikasi, daftarkan printernya, lalu cetak ulang dari Riwayat Cetak.',
   UNKNOWN_TRANSPORT_ERROR: 'Terjadi kesalahan cetak yang tidak dikenali.',
 };
 

@@ -27,7 +27,7 @@ import { BlePrinterDriver } from './BlePrinterDriver';
 import { ensureBluetoothPermission } from './bluetoothPermissions';
 import { LanPrinterDriver } from './LanPrinterDriver';
 import { PrintJobRepository, type CreateJobInput } from './PrintJobRepository';
-import { statusForError } from './PrintJobStateMachine';
+import { statusForError, messageForError } from './PrintJobStateMachine';
 import { printQueue } from './PrintQueue';
 import type { PrinterTransport, TransportTarget } from './PrinterTransport';
 import { buildReceipt } from './ReceiptTemplate';
@@ -35,6 +35,13 @@ import { receiptCopies } from './receiptCopies';
 
 /** Pabrik driver — bisa ditukar di test tanpa menyentuh jaringan. */
 export type TransportFactory = (target: TransportTarget) => PrinterTransport;
+
+/**
+ * Penanda printer untuk job yang belum punya printer (tujuan tanpa konfigurasi).
+ * `print_jobs.printer_id` NOT NULL, dan job begini tetap perlu tercatat di
+ * Riwayat Cetak supaya tidak hilang diam-diam.
+ */
+export const UNCONFIGURED_PRINTER_ID = 'unconfigured';
 
 export const lanTransportFactory: TransportFactory = target =>
   new LanPrinterDriver(target);
@@ -50,6 +57,10 @@ export const bleTransportFactory: BleTransportFactory = target =>
 export type DispatcherDeps = {
   repo: PrintJobRepository;
   getPrinter: (id: string) => Promise<PrinterConfig | null>;
+  /** Cari printer aktif untuk sebuah tujuan (dipakai saat cetak ulang job tanpa printer). */
+  findPrinterForDestination?: (
+    destination: PrintDestination,
+  ) => Promise<PrinterConfig | null>;
   transportFactory?: TransportFactory;
   /** Pabrik untuk printer BLE. Kosong = pakai bleTransportFactory. */
   bleTransportFactory?: BleTransportFactory;
@@ -91,6 +102,29 @@ export class PrintDispatcher {
     return { job, created };
   }
 
+  /**
+   * Catat job untuk tujuan yang belum punya printer (`NO_PRINTER`), lalu
+   * langsung tandai gagal.
+   *
+   * Alasan ini ada: kalau kita tolak permintaan sebelum menyimpan apa pun,
+   * tiket dapur yang gagal terkirim hilang tanpa jejak — tidak muncul di
+   * Riwayat Cetak, tidak ada tombol Cetak Ulang, dan kasir tidak pernah tahu.
+   * Dengan sentinel `UNCONFIGURED_PRINTER_ID`, job tetap tercatat dan bisa
+   * dicetak ulang setelah printer didaftarkan.
+   */
+  submitUnroutable(
+    input: Omit<SubmitInput, 'printerId'>,
+  ): { job: PrintJob; created: boolean } {
+    const { job, created } = this.deps.repo.createOrGet({
+      ...input,
+      printerId: UNCONFIGURED_PRINTER_ID,
+    } as CreateJobInput);
+    if (created) {
+      void this.run(job.id);
+    }
+    return { job, created };
+  }
+
   /** Jalankan job yang sudah ada (cetak ulang). */
   async run(jobId: string): Promise<PrintResult> {
     const job = this.deps.repo.findById(jobId);
@@ -100,8 +134,40 @@ export class PrintDispatcher {
     return printQueue.enqueue(job.printerId, job.id, () => this.execute(job));
   }
 
+  /**
+   * Cetak ulang. Kalau job dulu gagal karena belum ada printer, cari printer
+   * untuk tujuan itu sekarang — kasir biasanya mencetak ulang SETELAH
+   * mendaftarkan printernya, jadi memakai sentinel yang sama akan gagal lagi.
+   */
+  async reprint(jobId: string): Promise<PrintResult> {
+    const job = this.deps.repo.findById(jobId);
+    if (!job) {
+      return { jobId, status: 'failed' };
+    }
+
+    if (job.printerId === UNCONFIGURED_PRINTER_ID) {
+      const printer = await this.deps.findPrinterForDestination?.(
+        job.destination,
+      );
+      if (printer) {
+        this.deps.repo.updatePrinterId(job.id, printer.id);
+      }
+    }
+
+    return this.run(jobId);
+  }
+
   /** Isi job dari awal sampai akhir. Serial per printer lewat antrean. */
   private async execute(job: PrintJob): Promise<PrintResult> {
+    if (job.printerId === UNCONFIGURED_PRINTER_ID) {
+      return this.finish(job.id, 'failed', {
+        code: 'NO_PRINTER',
+        message: messageForError('NO_PRINTER'),
+        transmissionStarted: false,
+        at: new Date().toISOString(),
+      });
+    }
+
     const printer = await this.deps.getPrinter(job.printerId);
     if (!printer || !printer.enabled) {
       return this.fail(

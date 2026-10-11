@@ -66,6 +66,8 @@ export function AppServicesProvider({
         const all = await listPrinters();
         return all.find(p => p.id === id) ?? null;
       },
+      // Dipakai saat mencetak ulang job yang dulu gagal karena belum ada printer.
+      findPrinterForDestination,
       onJobStatusChange: job => {
         jobStatusListeners.forEach(listener => listener(job));
       },

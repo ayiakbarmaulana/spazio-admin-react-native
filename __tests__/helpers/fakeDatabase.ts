@@ -50,8 +50,15 @@ export class FakeDatabase implements Database {
       ] = params;
       const key = String(id);
       if (this.table('print_jobs').has(key)) {
-        // Meniru indeks UNIQUE pada idempotency_key.
         throw new Error(`UNIQUE constraint failed: print_jobs.id (${key})`);
+      }
+      // Meniru indeks UNIQUE pada idempotency_key (idx_print_jobs_idempotency).
+      for (const row of this.table('print_jobs').values()) {
+        if (row.idempotency_key === idempotencyKey) {
+          throw new Error(
+            `UNIQUE constraint failed: print_jobs.idempotency_key (${String(idempotencyKey)})`,
+          );
+        }
       }
       this.table('print_jobs').set(key, {
         id,
@@ -86,6 +93,16 @@ export class FakeDatabase implements Database {
       const row = this.table('print_jobs').get(String(id));
       if (row) {
         row.attempt_count = Number(row.attempt_count) + 1;
+        row.updated_at = updatedAt;
+      }
+      return;
+    }
+
+    if (/^UPDATE print_jobs SET printer_id/i.test(normalized)) {
+      const [printerId, updatedAt, id] = params;
+      const row = this.table('print_jobs').get(String(id));
+      if (row) {
+        row.printer_id = printerId;
         row.updated_at = updatedAt;
       }
       return;

@@ -22,6 +22,7 @@ import {
   wrap,
 } from './EscPosRenderer';
 import { isComplimentary, paymentMethodLabel } from './paymentLabel';
+import { queueLabel } from './queueNumber';
 import type { ReceiptOrder } from '../types/printing';
 
 /** Lebar kolom label di blok info transaksi. */
@@ -103,6 +104,9 @@ function buildDetailLines(
     }
   }
 
+  // Tanpa CMD.LF di depan separator: persis seperti web
+  // (thermal-print.ts:512), supaya baris item terakhir dan garis pemisahnya
+  // tidak dipisah baris kosong. Dijaga __tests__/unit/escpos-fixture.test.ts.
   const out: (Uint8Array | string)[] = [separator(columns), CMD.LF];
   for (const [label, value] of detail) {
     // Kolom label = columns - 12, nominal rata kanan 12 (muat tanda minus).
@@ -145,6 +149,27 @@ export function buildReceipt(
   ];
   if (label) {
     parts.push(CMD.BOLD_ON, label, CMD.BOLD_OFF, CMD.LF);
+  }
+
+  // ── Blok antrian pelanggan. Dibaca dari jauh, jadi tebal + rata tengah +
+  // baris sendiri. SENGAJA TIDAK memakai `GS !` (perbesar font): hanya
+  // INIT/LF/ALIGN/BOLD yang terbukti jalan di printer BLE murah yang dipakai —
+  // byte tak dikenal bisa tercetak sebagai karakter sampah.
+  // ponytail: kalau nanti benar-benar perlu nomor raksasa, ukur dulu di
+  // hardware nyata, jangan tebak.
+  const antrian = queueLabel(order.noreceipt);
+  if (antrian) {
+    parts.push(
+      separator(columns),
+      CMD.LF,
+      CMD.ALIGN_C,
+      CMD.BOLD_ON,
+      antrian,
+      CMD.BOLD_OFF,
+      CMD.LF,
+      separator(columns),
+      CMD.LF,
+    );
   }
 
   // ── Info transaksi ────────────────────────────────────────────────────────
