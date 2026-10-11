@@ -85,21 +85,19 @@ export class PrintDispatcher {
   }
 
   /**
-   * Persist job, lalu antre. Job DIKEMBALIKAN sebelum transmisi mulai.
+   * Persist job BARU, lalu antre. Job DIKEMBALIKAN sebelum transmisi mulai.
    *
    * Itu keputusan sadar: WebView menunggu ack cepat supaya UI tidak menggantung
    * selama timeout 5 detik. Hasil akhirnya diambil lewat langganan status job.
+   *
+   * Tidak ada pengecekan idempotency — lihat `PrintJobRepository.create`.
    */
-  submit(input: SubmitInput): { job: PrintJob; created: boolean } {
-    const { job, created } = this.deps.repo.createOrGet(
-      input as CreateJobInput,
-    );
-    if (created) {
-      // Sengaja tidak di-await: keputusan untuk antre sudah final, dan antrean
-      // sendiri yang mengatur urutannya.
-      void this.run(job.id);
-    }
-    return { job, created };
+  submit(input: SubmitInput): PrintJob {
+    const job = this.deps.repo.create(input as CreateJobInput);
+    // Sengaja tidak di-await: keputusan untuk antre sudah final, dan antrean
+    // sendiri yang mengatur urutannya.
+    void this.run(job.id);
+    return job;
   }
 
   /**
@@ -112,17 +110,13 @@ export class PrintDispatcher {
    * Dengan sentinel `UNCONFIGURED_PRINTER_ID`, job tetap tercatat dan bisa
    * dicetak ulang setelah printer didaftarkan.
    */
-  submitUnroutable(
-    input: Omit<SubmitInput, 'printerId'>,
-  ): { job: PrintJob; created: boolean } {
-    const { job, created } = this.deps.repo.createOrGet({
+  submitUnroutable(input: Omit<SubmitInput, 'printerId'>): PrintJob {
+    const job = this.deps.repo.create({
       ...input,
       printerId: UNCONFIGURED_PRINTER_ID,
     } as CreateJobInput);
-    if (created) {
-      void this.run(job.id);
-    }
-    return { job, created };
+    void this.run(job.id);
+    return job;
   }
 
   /** Jalankan job yang sudah ada (cetak ulang). */
@@ -263,7 +257,8 @@ export class PrintDispatcher {
    * Cetak N salinan struk sebagai N job terpisah ke printer yang sama.
    *
    * Dipisah jadi job masing-masing supaya kegagalan satu salinan tidak
-   * menghapus salinan lain dari antrean.
+   * menghapus salinan lain dari antrean. Tidak ada sufiks pada orderId lagi:
+   * tiap job sudah pasti unik, jadi tabrakan kunci tidak mungkin terjadi.
    */
   submitReceiptCopies(
     orderId: string,
@@ -273,10 +268,8 @@ export class PrintDispatcher {
   ): PrintJob[] {
     const jobs: PrintJob[] = [];
     receiptCopies(payload, columns).forEach(copy => {
-      const { job } = this.deps.repo.createOrGet({
-        // orderId turunan per salinan: tanpa itu, tiga salinan bertabrakan di
-        // kunci idempotency dan hanya satu yang masuk antrean.
-        orderId: `${orderId}#${copy.label}`,
+      const job = this.deps.repo.create({
+        orderId,
         destination: 'customer_receipt',
         printerId,
         payload,

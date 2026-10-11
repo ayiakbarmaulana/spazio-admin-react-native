@@ -214,7 +214,7 @@ export type PrintJob = {
   createdAt: string;
   updatedAt: string;
   lastError: PrintJobError | null;
-  /** Kunci dedup: orderId + destination + printerId. */
+  /** Sisa kolom skema v1. Tidak lagi dipakai untuk dedup — lihat `create()`. */
   idempotencyKey: string;
 };
 

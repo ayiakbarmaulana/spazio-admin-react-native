@@ -151,7 +151,7 @@ export class BridgeHandler {
     // Riwayat Cetak dan struk pelanggan tetap tercetak seolah semuanya normal.
     // Kita catat job-nya sebagai gagal (NO_PRINTER) supaya muncul + bisa
     // dicetak ulang setelah printer didaftarkan.
-    const { job, created } = printerId
+    const job = printerId
       ? this.deps.dispatcher.submit({
           orderId: payload.orderId,
           destination: payload.destination,
@@ -167,12 +167,16 @@ export class BridgeHandler {
     return okResponse(request.requestId, {
       jobId: job.id,
       status: job.status,
-      // created=false artinya order ini memang sudah pernah dikirim — WebView
-      // bisa membedakan double-tap dari permintaan baru.
-      duplicate: !created,
+      // SELALU false. Dulu diisi dari dedup orderId + destination + printerId,
+      // tapi dedup itu sudah dihapus: kasir berhak mencetak struk yang sama
+      // berkali-kali. Field dipertahankan supaya PWA lama tidak pecah.
+      //
+      // Pengaman yang TERSISA: `handle()` menyimpan respons per `requestId`,
+      // jadi retry setelah timeout (requestId sama) bukan job kedua.
+      duplicate: false,
       // Tanpa printer, job-nya PASTI gagal. Beri tahu WebView supaya tidak
       // menampilkan toast sukses.
-      queued: Boolean(printerId) && created,
+      queued: Boolean(printerId),
       notice: CONNECTION_NOT_PRINTED_NOTICE,
     });
   }

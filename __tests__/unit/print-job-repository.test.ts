@@ -1,7 +1,7 @@
 // __tests__/unit/print-job-repository.test.ts
-// Repository job cetak. Yang dijaga: kunci dedup benar-benar unik, job macet
-// dipulihkan jadi 'unknown' (bukan 'failed'), dan pembersihan tidak menghapus
-// job yang masih hidup.
+// Repository job cetak. Yang dijaga: TIDAK ADA dedup (satu permintaan = satu
+// job baru, berapa kali pun dipanggil), job macet dipulihkan jadi 'unknown'
+// (bukan 'failed'), dan pembersihan tidak menghapus job yang masih hidup.
 
 import { FakeDatabase } from '../helpers/fakeDatabase';
 import {
@@ -28,7 +28,7 @@ function makeRepo() {
   return new PrintJobRepository(new FakeDatabase());
 }
 
-it('createOrGet membuat job sekali dan mengembalikan yang sama untuk kunci identik', () => {
+it('create tidak pernah dedup — input identik berkali-kali = job berbeda semua', () => {
   const repo = makeRepo();
   const input = {
     orderId: 'ord-1',
@@ -37,45 +37,47 @@ it('createOrGet membuat job sekali dan mengembalikan yang sama untuk kunci ident
     payload,
   };
 
-  const first = repo.createOrGet(input);
-  const second = repo.createOrGet(input);
+  const first = repo.create(input);
+  const second = repo.create(input);
+  const third = repo.create(input);
 
-  expect(first.created).toBe(true);
-  expect(second.created).toBe(false);
-  expect(second.job.id).toBe(first.job.id);
+  // Ini perilaku yang diminta: kasir boleh cetak struk sama sebanyak yang dia
+  // mau. Tidak ada kunci orderId yang mengunci order setelah submit pertama.
+  expect(new Set([first.id, second.id, third.id]).size).toBe(3);
+  expect(repo.findRecent()).toHaveLength(3);
   // Status awal selalu queued — belum ada byte yang dikirim.
-  expect(first.job.status).toBe('queued');
-  expect(first.job.attemptCount).toBe(0);
+  expect(first.status).toBe('queued');
+  expect(first.attemptCount).toBe(0);
 });
 
 it('tujuan atau printer berbeda menghasilkan job berbeda', () => {
   const repo = makeRepo();
 
-  const receipt = repo.createOrGet({
+  const receipt = repo.create({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
     payload,
   });
-  const kitchen = repo.createOrGet({
+  const kitchen = repo.create({
     orderId: 'ord-1',
     destination: 'kitchen_ticket',
     printerId: 'prn-1',
     payload,
   });
-  const otherPrinter = repo.createOrGet({
+  const otherPrinter = repo.create({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-2',
     payload,
   });
 
-  expect(new Set([receipt.job.id, kitchen.job.id, otherPrinter.job.id]).size).toBe(3);
+  expect(new Set([receipt.id, kitchen.id, otherPrinter.id]).size).toBe(3);
 });
 
 it('payload bertahan utuh setelah bolak-balik lewat database', () => {
   const repo = makeRepo();
-  const { job } = repo.createOrGet({
+  const job = repo.create({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -89,7 +91,7 @@ it('payload bertahan utuh setelah bolak-balik lewat database', () => {
 
 it('updateStatus menyimpan error lengkap beserta penanda transmisi', () => {
   const repo = makeRepo();
-  const { job } = repo.createOrGet({
+  const job = repo.create({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -117,27 +119,27 @@ it('updateStatus menyimpan error lengkap beserta penanda transmisi', () => {
 
 it('findPending hanya mengembalikan job yang belum selesai', () => {
   const repo = makeRepo();
-  const a = repo.createOrGet({
+  const a = repo.create({
     orderId: 'ord-a',
     destination: 'customer_receipt',
     printerId: 'prn-1',
     payload,
   });
-  const b = repo.createOrGet({
+  const b = repo.create({
     orderId: 'ord-b',
     destination: 'customer_receipt',
     printerId: 'prn-1',
     payload,
   });
-  repo.updateStatus(a.job.id, 'submitted');
+  repo.updateStatus(a.id, 'submitted');
 
   const pending = repo.findPending('prn-1');
-  expect(pending.map(j => j.id)).toEqual([b.job.id]);
+  expect(pending.map(j => j.id)).toEqual([b.id]);
 });
 
 it('job berstatus unknown tidak dianggap pending — kasir yang memutuskan cetak ulang', () => {
   const repo = makeRepo();
-  const { job } = repo.createOrGet({
+  const job = repo.create({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -156,7 +158,7 @@ it('job berstatus unknown tidak dianggap pending — kasir yang memutuskan cetak
 it('recoverInterruptedJobs menandai job macet sebagai unknown, bukan failed', () => {
   const db = new FakeDatabase();
   const repo = new PrintJobRepository(db);
-  const { job } = repo.createOrGet({
+  const job = repo.create({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -178,7 +180,7 @@ it('recoverInterruptedJobs menandai job macet sebagai unknown, bukan failed', ()
 
 it('job yang baru mulai tidak dianggap macet', () => {
   const repo = makeRepo();
-  const { job } = repo.createOrGet({
+  const job = repo.create({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',

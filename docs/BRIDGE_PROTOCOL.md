@@ -60,8 +60,16 @@ const unsubscribe = window.SpazioNative.onJobStatus(job => {
 Tidak ada cara mengetahui kertas benar-benar keluar. UI PWA tidak boleh
 menampilkan "Cetak berhasil" — gunakan "Sedang dikirim ke printer".
 
-`duplicate: true` berarti order ini sudah pernah dikirim ke printer itu. Ini
-mekanisme yang mencegah double-tap tombol cetak menghasilkan dua struk.
+`duplicate` selalu `false`. Dedup berbasis orderId sudah dihapus (2026-10):
+kasir boleh mencetak struk yang sama berkali-kali — cetak ulang manual, struk
+hilang, tamu minta salinan. Field-nya dipertahankan supaya PWA lama tidak pecah.
+
+Pengaman yang tersisa ada di `requestId`: permintaan dengan `requestId` yang
+sama tidak pernah menghasilkan job kedua. Jangan pernah memakai `requestId`
+baru untuk retry perintah cetak yang SAMA — itu akan mencetak struk kedua.
+
+Double-tap tombol cetak dari UI memang memakai `requestId` berbeda, jadi itu
+menghasilkan dua struk. Itu perilaku yang disengaja.
 
 ## Sisi native
 

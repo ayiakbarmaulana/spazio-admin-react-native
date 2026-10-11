@@ -125,8 +125,31 @@ it('requestId yang sama dikembalikan dari cache — tidak mencetak dua kali', as
 
   expect(first.ok).toBe(true);
   expect(second).toEqual(first);
-  // Kuncinya: satu job, bukan dua.
+  // Kuncinya: satu job, bukan dua. requestId sama = retry dari WebView
+  // (timeout / layar nyangkut), bukan perintah cetak baru.
   expect(repo.findRecent()).toHaveLength(1);
+});
+
+it('orderId SAMA dengan requestId berbeda = dua job (cetak ulang manual)', async () => {
+  const { handler, repo } = setup();
+
+  const payload = {
+    orderId: 'ord-1',
+    destination: 'customer_receipt',
+    printerId: 'prn-1',
+    order,
+  };
+
+  const first = await handler.handle(request('PRINT_REQUEST', 'r1', payload));
+  const second = await handler.handle(request('PRINT_REQUEST', 'r2', payload));
+
+  expect(first.ok).toBe(true);
+  expect(second.ok).toBe(true);
+  // Ini inti perubahannya: kasir menekan "Cetak Ulang" = requestId baru =
+  // job baru = struk keluar lagi. Dulu ini diblokir dedup orderId dan tombol
+  // Cetak Ulang hanya memunculkan toast hijau tanpa mencetak apa pun.
+  expect(repo.findRecent()).toHaveLength(2);
+  expect(second.data).toMatchObject({ duplicate: false, queued: true });
 });
 
 it('orderId berbeda dengan requestId berbeda menghasilkan dua job', async () => {

@@ -127,8 +127,8 @@ it('job dipersist ke database SEBELUM byte apa pun dikirim', async () => {
   expect(FakeTransport.sent).toHaveLength(1);
 });
 
-it('order yang sama tidak menghasilkan job kedua (dedup idempotency)', async () => {
-  const { dispatcher } = setup();
+it('order yang sama TETAP menghasilkan job kedua — tidak ada dedup', async () => {
+  const { repo, dispatcher } = setup();
 
   const first = dispatcher.submit({
     orderId: 'ord-1',
@@ -143,16 +143,16 @@ it('order yang sama tidak menghasilkan job kedua (dedup idempotency)', async () 
     payload: order,
   });
 
-  expect(first.created).toBe(true);
-  expect(second.created).toBe(false);
-  expect(second.job.id).toBe(first.job.id);
+  expect(second.id).not.toBe(first.id);
+  expect(repo.findRecent()).toHaveLength(2);
 
   await flush();
-  // Hanya satu kali kirim meski submit dipanggil dua kali (double-tap kasir).
-  expect(FakeTransport.sent).toHaveLength(1);
+  // Dua kali kirim, dua struk. Ini perilaku yang diminta: kasir boleh mencetak
+  // struk yang sama berkali-kali tanpa ada yang memblokir.
+  expect(FakeTransport.sent).toHaveLength(2);
 });
 
-it('job GAGAL boleh dicetak ulang dari web — bukan diblokir dedup selamanya', async () => {
+it('job GAGAL boleh dicetak ulang dari web — selalu bikin job baru', async () => {
   const { repo, dispatcher } = setup();
   FakeTransport.result = {
     ok: false,
@@ -171,11 +171,10 @@ it('job GAGAL boleh dicetak ulang dari web — bukan diblokir dedup selamanya', 
     payload: order,
   });
   await flush();
-  expect(repo.findById(first.job.id)?.status).toBe('failed');
+  expect(repo.findById(first.id)?.status).toBe('failed');
 
   // Ini kasus nyata: kertas habis / printer mati saat cetak pertama. Kasir
-  // memperbaiki printer lalu mencetak lagi. Dulu percobaan kedua balik dengan
-  // ack "sukses" untuk job gagal yang tidak pernah diantre ulang.
+  // memperbaiki printer lalu mencetak lagi.
   FakeTransport.result = { ok: true };
   const second = dispatcher.submit({
     orderId: 'ord-1',
@@ -184,17 +183,16 @@ it('job GAGAL boleh dicetak ulang dari web — bukan diblokir dedup selamanya', 
     payload: order,
   });
 
-  expect(second.created).toBe(true);
-  expect(second.job.id).not.toBe(first.job.id);
+  expect(second.id).not.toBe(first.id);
 
   await flush();
-  expect(repo.findById(second.job.id)?.status).toBe('submitted');
+  expect(repo.findById(second.id)?.status).toBe('submitted');
   // Riwayat menyimpan kedua percobaan — kegagalan tidak dihapus.
   expect(repo.findRecent()).toHaveLength(2);
 });
 
-it('job SUBMITTED tetap diblokir dedup — tidak boleh bikin struk dobel', async () => {
-  const { dispatcher } = setup();
+it('job SUBMITTED tetap boleh dicetak ulang — itu struk hilang, bukan dobel tak sengaja', async () => {
+  const { repo, dispatcher } = setup();
 
   const first = dispatcher.submit({
     orderId: 'ord-1',
@@ -203,7 +201,10 @@ it('job SUBMITTED tetap diblokir dedup — tidak boleh bikin struk dobel', async
     payload: order,
   });
   await flush();
+  expect(repo.findById(first.id)?.status).toBe('submitted');
 
+  // Dulu job `submitted` mengunci order ini selamanya (dedup orderId). Sekarang
+  // permintaan baru selalu jadi job baru.
   const second = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'customer_receipt',
@@ -211,13 +212,13 @@ it('job SUBMITTED tetap diblokir dedup — tidak boleh bikin struk dobel', async
     payload: order,
   });
 
-  expect(second.created).toBe(false);
-  expect(second.job.id).toBe(first.job.id);
+  expect(second.id).not.toBe(first.id);
   await flush();
-  expect(FakeTransport.sent).toHaveLength(1);
+  expect(FakeTransport.sent).toHaveLength(2);
+  expect(repo.findRecent()).toHaveLength(2);
 });
 
-it('job UNKNOWN tidak diulang otomatis — printer mungkin sudah mencetak', async () => {
+it('job UNKNOWN juga boleh dicetak ulang manual — keputusan kasir', async () => {
   const { repo, dispatcher } = setup();
   FakeTransport.result = {
     ok: false,
@@ -236,8 +237,9 @@ it('job UNKNOWN tidak diulang otomatis — printer mungkin sudah mencetak', asyn
     payload: order,
   });
   await flush();
-  expect(repo.findById(first.job.id)?.status).toBe('unknown');
+  expect(repo.findById(first.id)?.status).toBe('unknown');
 
+  FakeTransport.result = { ok: true };
   const second = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'customer_receipt',
@@ -245,15 +247,17 @@ it('job UNKNOWN tidak diulang otomatis — printer mungkin sudah mencetak', asyn
     payload: order,
   });
 
-  // Harus lewat Riwayat Cetak dengan konfirmasi kasir, bukan auto-retry.
-  expect(second.created).toBe(false);
-  expect(second.job.id).toBe(first.job.id);
+  // Job lama tetap `unknown` di Riwayat Cetak; job baru jalan sendiri.
+  expect(second.id).not.toBe(first.id);
+  await flush();
+  expect(repo.findById(first.id)?.status).toBe('unknown');
+  expect(repo.findById(second.id)?.status).toBe('submitted');
 });
 
 it('tanpa printer: job TETAP tercatat sebagai gagal (tidak hilang bisu)', async () => {
   const { repo, dispatcher } = setup();
 
-  const { job } = dispatcher.submitUnroutable({
+  const job = dispatcher.submitUnroutable({
     orderId: 'ord-1',
     destination: 'kitchen_ticket',
     payload: order,
@@ -273,7 +277,7 @@ it('cetak ulang job tanpa printer menunjuk ke printer yang baru didaftarkan', as
   });
   const { repo, dispatcher } = setup(kitchenPrinter, async () => kitchenPrinter);
 
-  const { job } = dispatcher.submitUnroutable({
+  const job = dispatcher.submitUnroutable({
     orderId: 'ord-1',
     destination: 'kitchen_ticket',
     payload: order,
@@ -294,7 +298,7 @@ it('cetak ulang job tanpa printer menunjuk ke printer yang baru didaftarkan', as
 it('pengiriman sukses → status submitted, byte berisi ESC/POS struk', async () => {
   const { repo, dispatcher } = setup();
 
-  const { job } = dispatcher.submit({
+  const job = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -325,7 +329,7 @@ it('error sebelum transmisi → failed', async () => {
     },
   };
 
-  const { job } = dispatcher.submit({
+  const job = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -353,7 +357,7 @@ it('koneksi putus SETELAH byte terkirim → unknown, bukan failed', async () => 
     },
   };
 
-  const { job } = dispatcher.submit({
+  const job = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -371,7 +375,7 @@ it('koneksi putus SETELAH byte terkirim → unknown, bukan failed', async () => 
 it('status perubahan dilaporkan ke bridge lewat onJobStatusChange', async () => {
   const { dispatcher, changes } = setup();
 
-  const { job } = dispatcher.submit({
+  const job = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -425,7 +429,7 @@ it('printer USB ditolak dengan TRANSPORT_UNSUPPORTED, tanpa membuka transport', 
     printerConfig({ connectionType: 'usb', host: undefined }),
   );
 
-  const { job } = dispatcher.submit({
+  const job = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -444,7 +448,7 @@ it('tiket dapur dirender tanpa harga meski printer melayani tujuan dapur', async
     printerConfig({ destinations: ['kitchen_ticket'] }),
   );
 
-  const { job } = dispatcher.submit({
+  const job = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'kitchen_ticket',
     printerId: 'prn-1',
@@ -470,7 +474,7 @@ it('tiket dapur dirender tanpa harga meski printer melayani tujuan dapur', async
 it('printer 80mm memakai 48 kolom', async () => {
   const { dispatcher } = setup(printerConfig({ paperWidthMm: 80 }));
 
-  const { job } = dispatcher.submit({
+  const job = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -486,7 +490,7 @@ it('printer 80mm memakai 48 kolom', async () => {
 it('host dan port printer datang dari konfigurasi, bukan dari payload job', async () => {
   const { dispatcher } = setup(printerConfig({ host: '10.0.0.9', port: 9101 }));
 
-  const { job } = dispatcher.submit({
+  const job = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -506,7 +510,7 @@ it('host dan port printer datang dari konfigurasi, bukan dari payload job', asyn
 it('order tanpa item ditolak dengan INVALID_CONFIG, tidak cetak struk kosong', async () => {
   const { repo, dispatcher } = setup();
 
-  const { job } = dispatcher.submit({
+  const job = dispatcher.submit({
     orderId: 'ord-empty',
     destination: 'customer_receipt',
     printerId: 'prn-1',
@@ -521,7 +525,7 @@ it('order tanpa item ditolak dengan INVALID_CONFIG, tidak cetak struk kosong', a
 it('printer nonaktif → failed dengan INVALID_CONFIG, tanpa membuka socket', async () => {
   const { repo, dispatcher } = setup(printerConfig({ enabled: false }));
 
-  const { job } = dispatcher.submit({
+  const job = dispatcher.submit({
     orderId: 'ord-1',
     destination: 'customer_receipt',
     printerId: 'prn-1',

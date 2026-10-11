@@ -10,16 +10,3 @@ export function newId(prefix = 'id'): string {
   const time = Date.now().toString(36);
   return `${prefix}_${time}${counter.toString(36)}${rand}`;
 }
-
-/**
- * Kunci dedup job cetak. Satu order + satu tujuan + satu printer hanya boleh
- * menghasilkan satu job. Dipakai baik oleh dispatcher native maupun bridge
- * WebView (PRD §8.4, §9.3).
- */
-export function printJobKey(
-  orderId: string,
-  destination: string,
-  printerId: string,
-): string {
-  return `${orderId}::${destination}::${printerId}`;
-}

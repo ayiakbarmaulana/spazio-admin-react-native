@@ -52,14 +52,8 @@ export class FakeDatabase implements Database {
       if (this.table('print_jobs').has(key)) {
         throw new Error(`UNIQUE constraint failed: print_jobs.id (${key})`);
       }
-      // Meniru indeks UNIQUE pada idempotency_key (idx_print_jobs_idempotency).
-      for (const row of this.table('print_jobs').values()) {
-        if (row.idempotency_key === idempotencyKey) {
-          throw new Error(
-            `UNIQUE constraint failed: print_jobs.idempotency_key (${String(idempotencyKey)})`,
-          );
-        }
-      }
+      // Indeks UNIQUE pada idempotency_key sudah di-drop di migrasi v2: satu
+      // order boleh menghasilkan banyak job (cetak ulang manual).
       this.table('print_jobs').set(key, {
         id,
         order_id: orderId,

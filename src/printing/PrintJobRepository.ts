@@ -5,6 +5,9 @@
 // Konsekuensi yang diterima: kalau app mati tepat setelah insert tapi sebelum
 // cetak, job tetap ada dan statusnya 'queued' — terlihat kasir, bisa dicetak
 // ulang. Itu jauh lebih baik daripada ack "berhasil" untuk struk yang hilang.
+//
+// TIDAK ADA dedup di sini. Satu permintaan cetak = satu job baru, selamanya.
+// Lihat `create()` untuk alasan dan di mana pengaman yang tersisa berada.
 
 import type { Database, SqlValue } from '../offline/database';
 import { getDatabase } from '../offline/database';
@@ -16,7 +19,7 @@ import type {
   PrintJobStatus,
   ReceiptOrder,
 } from '../types/printing';
-import { newId, printJobKey } from '../utils/id';
+import { newId } from '../utils/id';
 
 type JobRow = {
   id: string;
@@ -57,17 +60,6 @@ export type CreateJobInput = {
   payload: ReceiptOrder | KitchenTicketOrder;
 };
 
-/**
- * Boleh diulang dari POS tanpa konfirmasi tambahan?
- *
- * `failed`/`cancelled` = tidak ada byte yang keluar (atau dibatalkan sebelum
- * kirim) → aman diulang. `submitted`/`unknown` sengaja TIDAK boleh: struk
- * mungkin sudah tercetak, dan mengulangnya bikin struk dobel.
- */
-function isRetryable(status: PrintJobStatus): boolean {
-  return status === 'failed' || status === 'cancelled';
-}
-
 export class PrintJobRepository {
   private readonly db: Database;
 
@@ -78,26 +70,24 @@ export class PrintJobRepository {
   }
 
   /**
-   * Buat job, atau kembalikan yang sudah ada kalau kunci dedup-nya sama.
+   * Selalu membuat job BARU. Tidak ada pengecekan idempotency.
    *
-   * `created` membedakan "job baru" dari "sudah pernah dibuat" supaya caller
-   * tidak mengantre dua kali untuk order yang sama.
+   * Keputusan sadar (2026-10): kasir harus bisa mencetak struk yang sama
+   * sebanyak yang dia mau — cetak ulang manual dari POS, struk hilang, tamu
+   * minta salinan lagi. Dedup berbasis `orderId` mengunci order pertama
+   * selamanya begitu satu job berstatus `submitted`, dan tidak ada UI di POS
+   * yang bisa membukanya.
    *
-   * PENTING: dedup hanya berlaku selama job pendahulunya masih berarti.
-   * Job yang sudah `failed`/`cancelled` boleh diulang — kalau tidak, order
-   * yang struknya gagal (kertas habis, printer mati) terkunci selamanya di
-   * kunci idempotency yang sama dan kasir tidak punya cara mencetak ulang
-   * dari POS. `submitted` TIDAK boleh diulang (struk sudah keluar), dan
-   * `unknown` TIDAK boleh diulang otomatis (printer mungkin sudah mencetak) —
-   * keduanya harus lewat layar Riwayat Cetak dengan konfirmasi kasir.
+   * Pengaman yang TERSISA ada di level permintaan, bukan level order:
+   * `BridgeHandler.handle` menyimpan respons per `requestId`, jadi satu
+   * perintah cetak yang di-retry setelah timeout (requestId sama) tidak
+   * berubah jadi dua job. Double-tap tombol dari UI juga requestId-nya
+   * berbeda, jadi itu memang menghasilkan dua struk — itu disengaja.
+   *
+   * `idempotency_key` tetap diisi unik per job: kolomnya NOT NULL dan masih
+   * ada UNIQUE index di DB lama sampai migrasi v2 menghapusnya.
    */
-  createOrGet(input: CreateJobInput): { job: PrintJob; created: boolean } {
-    const key = printJobKey(input.orderId, input.destination, input.printerId);
-    const existing = this.findByIdempotencyKey(key);
-    if (existing && !isRetryable(existing.status)) {
-      return { job: existing, created: false };
-    }
-
+  create(input: CreateJobInput): PrintJob {
     const now = new Date().toISOString();
     const job: PrintJob = {
       id: newId('job'),
@@ -107,13 +97,7 @@ export class PrintJobRepository {
       status: 'queued',
       payload: input.payload,
       attemptCount: 0,
-      // Percobaan ulang memakai kunci turunan supaya baris job lama (dan
-      // riwayat kegagalannya) tetap ada, tanpa melanggar indeks unik di
-      // idempotency_key.
-      idempotencyKey:
-        existing && isRetryable(existing.status)
-          ? `${key}::retry-${newId('r')}`
-          : key,
+      idempotencyKey: newId('key'),
       lastError: null,
       createdAt: now,
       updatedAt: now,
@@ -139,21 +123,13 @@ export class PrintJobRepository {
       ],
     );
 
-    return { job, created: true };
+    return job;
   }
 
   findById(id: string): PrintJob | null {
     const rows = this.db.query<JobRow>(
       'SELECT * FROM print_jobs WHERE id = ? LIMIT 1;',
       [id],
-    );
-    return rows.length > 0 ? toJob(rows[0]) : null;
-  }
-
-  findByIdempotencyKey(key: string): PrintJob | null {
-    const rows = this.db.query<JobRow>(
-      'SELECT * FROM print_jobs WHERE idempotency_key = ? LIMIT 1;',
-      [key],
     );
     return rows.length > 0 ? toJob(rows[0]) : null;
   }

@@ -86,6 +86,17 @@ export const MIGRATIONS: Migration[] = [
         ON sync_outbox (next_attempt_at);`,
     ],
   },
+  {
+    // Dedup job cetak DIHAPUS (2026-10). Kasir harus bisa mencetak struk yang
+    // sama berkali-kali; lihat `PrintJobRepository.create`.
+    //
+    // Index-nya di-drop karena UNIQUE-nya akan menolak job kedua begitu
+    // `idempotency_key` tidak lagi bermakna dedup. Kolomnya TIDAK di-drop:
+    // SQLite tidak bisa DROP COLUMN di versi lama, dan kolom NOT NULL yang
+    // masih diisi nilai unik tidak mengganggu apa pun.
+    version: 2,
+    statements: [`DROP INDEX IF EXISTS idx_print_jobs_idempotency;`],
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
