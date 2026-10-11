@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Layar pembuka Android < 12 (API < 31): windowBackground Activity.
+  Logo digambar di tengah dengan latar warna solid dari colors.xml.
+  File ini ditulis tangan (bukan oleh gen-assets.js) karena isinya
+  referensi resource, bukan gambar.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background" />
+    <item>
+        <bitmap
+            android:src="@drawable/splash_logo"
+            android:gravity="center"
+            android:filter="true" />
+    </item>
+</layer-list>

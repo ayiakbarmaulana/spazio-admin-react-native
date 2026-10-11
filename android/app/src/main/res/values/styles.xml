@@ -6,4 +6,17 @@
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     </style>
 
+    <!--
+      Tema layar pembuka (opening screen). Dipakai MainActivity sampai JS
+      selesai dimuat; React Native menggantinya lewat setTheme(AppTheme)
+      begitu konten siap (lihat MainActivity.kt).
+
+      Android 12+ punya API splash sendiri; override-nya ada di
+      res/values-v31/styles.xml.
+    -->
+    <style name="SplashTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_screen</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+
 </resources>

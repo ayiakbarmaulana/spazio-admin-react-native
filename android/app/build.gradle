@@ -82,8 +82,8 @@ android {
         applicationId "com.melvapos.spazio"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
 
         // Printer LAN adalah socket TCP mentah ke alamat privat (192.168.x.x)
         // di port 9100. Tanpa ini, Android 9+ memblokir lalu lintas itu dan

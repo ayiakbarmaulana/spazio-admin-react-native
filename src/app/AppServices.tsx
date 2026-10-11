@@ -28,7 +28,7 @@ import { BridgeHandler } from '../webview/bridgeHandler';
 import { Colors } from './theme';
 import { Loading } from './ui';
 
-export const APP_VERSION = '0.0.1';
+export const APP_VERSION = '0.1.0';
 
 export type AppServices = {
   repo: PrintJobRepository;

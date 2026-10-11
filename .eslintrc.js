@@ -11,5 +11,11 @@ module.exports = {
         'no-script-url': 'off',
       },
     },
+    {
+      // Skrip build dijalankan Node langsung (bukan bundel Metro), jadi
+      // global Node seperti Buffer dan require tersedia apa adanya.
+      files: ['scripts/**/*.js'],
+      env: { node: true },
+    },
   ],
 };

@@ -1,4 +1,11 @@
 {
   "name": "SpazioNativePOS",
-  "displayName": "Spazio POS"
+  "displayName": "Spazio POS",
+  "assets": {
+    "icon": "./assets/icon.png",
+    "iconForeground": "./assets/icon-foreground.png",
+    "iconBackground": "#BF4847",
+    "splash": "./assets/splash.png",
+    "splashBackground": "#FFFFFF"
+  }
 }

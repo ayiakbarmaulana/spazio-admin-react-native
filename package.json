@@ -1,9 +1,10 @@
 {
   "name": "spazio-native-pos",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
+    "assets": "node scripts/gen-assets.js",
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -46,6 +47,7 @@
     "jest": "^29.6.3",
     "prettier": "2.8.8",
     "react-test-renderer": "19.2.3",
+    "sharp": "^0.35.5",
     "typescript": "^6.0.3"
   },
   "engines": {
