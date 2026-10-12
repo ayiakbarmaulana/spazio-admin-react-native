@@ -14,6 +14,7 @@ import { ensureBluetoothPermission } from '../../printing/bluetoothPermissions';
 import { LanPrinterDriver } from '../../printing/LanPrinterDriver';
 import type { PrinterTransport } from '../../printing/PrinterTransport';
 import { buildReceipt } from '../../printing/ReceiptTemplate';
+import { buildLabel } from '../../printing/TsplTemplate';
 import type { PrintJobError, PrinterConfig } from '../../types/printing';
 import {
   DEFAULT_BLUETOOTH_CONNECT_TIMEOUT_MS,
@@ -126,14 +127,25 @@ export function PrinterDiagnosticsScreen() {
             writeTimeoutMs: DEFAULT_WRITE_TIMEOUT_MS,
           });
 
-    const result = printSample
-      ? await driver.send(
-          buildReceipt(
+    // Halaman uji memakai bahasa perintah yang SAMA dengan cetak nyata —
+    // kirim ESC/POS ke printer label akan keluar sebagai teks mentah.
+    const sampleBytes =
+      printer.protocol === 'tspl'
+        ? buildLabel({
+            noreceipt: 'TES-PRINTER',
+            menuName: 'Halaman Uji',
+            variant: 'BP-TR110 · 20×30mm',
+            note: 'Ini label uji. Bukan transaksi nyata.',
+            createdAt: new Date().toISOString(),
+          })
+        : buildReceipt(
             SAMPLE_ORDER as never,
             PAPER_COLUMNS[printer.paperWidthMm],
             'HALAMAN UJI',
-          ),
-        )
+          );
+
+    const result = printSample
+      ? await driver.send(sampleBytes)
       : await driver.test();
 
     setOutcome(

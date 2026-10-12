@@ -13,6 +13,7 @@ import type { Database, SqlValue } from '../offline/database';
 import { getDatabase } from '../offline/database';
 import type {
   KitchenTicketOrder,
+  LabelOrder,
   PrintDestination,
   PrintJob,
   PrintJobError,
@@ -42,7 +43,10 @@ function toJob(row: JobRow): PrintJob {
     destination: row.destination as PrintDestination,
     printerId: row.printer_id,
     status: row.status as PrintJobStatus,
-    payload: JSON.parse(row.payload) as ReceiptOrder | KitchenTicketOrder,
+    payload: JSON.parse(row.payload) as
+      | ReceiptOrder
+      | KitchenTicketOrder
+      | LabelOrder,
     attemptCount: Number(row.attempt_count),
     idempotencyKey: row.idempotency_key,
     lastError: row.last_error
@@ -57,7 +61,7 @@ export type CreateJobInput = {
   orderId: string;
   destination: PrintDestination;
   printerId: string;
-  payload: ReceiptOrder | KitchenTicketOrder;
+  payload: ReceiptOrder | KitchenTicketOrder | LabelOrder;
 };
 
 export class PrintJobRepository {

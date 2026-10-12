@@ -5,7 +5,7 @@
 import { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import type { PrintJob } from '../../types/printing';
+import type { PrintDestination, PrintJob } from '../../types/printing';
 import { useAppServices } from '../AppServices';
 import { Colors, FontSize, Spacing } from '../theme';
 import {
@@ -17,6 +17,13 @@ import {
   Screen,
   StatusPill,
 } from '../ui';
+
+/** Nama tampilan destinasi untuk riwayat. */
+const DESTINATION_LABEL: Record<PrintDestination, string> = {
+  customer_receipt: 'Struk Pelanggan',
+  kitchen_ticket: 'Tiket Dapur',
+  label: 'Label Produk',
+};
 
 /** Label dan warna per status. 'unknown' sengaja kuning, bukan merah. */
 const STATUS_META: Record<
@@ -106,9 +113,7 @@ export function PrintJobsScreen() {
                   <StatusPill label={meta.label} tone={meta.tone} />
                 </View>
                 <Body muted>
-                  {job.destination === 'customer_receipt'
-                    ? 'Struk Pelanggan'
-                    : 'Tiket Dapur'}{' '}
+                  {DESTINATION_LABEL[job.destination]}{' '}
                   · {formatTime(job.createdAt)} · percobaan {job.attemptCount}
                 </Body>
                 {job.lastError ? (

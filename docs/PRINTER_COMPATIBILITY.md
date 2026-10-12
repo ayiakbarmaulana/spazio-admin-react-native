@@ -9,6 +9,56 @@ didukung, bukan perangkat yang sudah diverifikasi.
 Menguji pada perangkat asli adalah item pertama di daftar pekerjaan yang belum
 selesai. Lihat [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md).
 
+## Bahasa perintah: ESC/POS vs TSPL
+
+Printer thermal tidak semuanya bicara bahasa yang sama. Aplikasi ini mendukung
+dua protokol, dipilih eksplisit per printer di **Pengaturan Printer → Protokol
+Printer**:
+
+| Protokol | Untuk | Renderer | Koneksi |
+| --- | --- | --- | --- |
+| **ESC/POS** | Struk 58/80mm, tiket dapur | `src/printing/EscPosRenderer.ts` | LAN, Bluetooth |
+| **TSPL/TSPL2** | Label produk 20×30mm | `src/printing/TsplTemplate.ts` | LAN |
+
+Salah pilih protokol = printer mencetak teks mentah (perintah "SIZE 20 mm,30 mm"
+tercetak apa adanya). Validasi (`validatePrinterConfig`) menolak kombinasi yang
+pasti salah: tujuan `label` tanpa protokol TSPL, dan TSPL tanpa tujuan `label`.
+
+## Printer label BP-TR110 (TSPL)
+
+Blueprint BP-TR110 (driver `BP-TR110(TSPL)`) bicara **TSPL**, bukan ESC/POS —
+walau sama-sama dikirim mentah lewat socket TCP port 9100. Yang dicetak: label
+produk 20×30mm berisi nama produk, varian, dan notes order item.
+
+Skrip yang dihasilkan `buildLabel()`:
+
+```
+SIZE 20 mm,30 mm
+GAP 2 mm,0
+DIRECTION 1
+CLS
+TEXT x,y,"3",0,1,1,"<nama produk>"
+TEXT x,y,"2",0,1,1,"<varian>"
+TEXT 4,y,"1",0,1,1,"<notes>"
+TEXT 4,y,"1",0,1,1,"<noreceipt>"
+PRINT 1,1
+```
+
+### Checklist uji fisik (tidak bisa diverifikasi dari kode)
+
+- [ ] **`SIZE 20 mm,30 mm` cocok dengan label fisik.** Kalau tidak, isi label
+      terpotong atau label terbuang.
+- [ ] **`GAP 2 mm,0` cocok dengan sensor printer.** Kalau label beruntun tanpa
+      gap (label kontinu), ganti baris ini dengan `BLACK MARK`/`GAP 0,0`
+      sesuai manual printer.
+- [ ] **Nomor order di bagian bawah label tidak terpotong.** Kalau terpotong,
+      naikkan `LABEL_HEIGHT_MM` atau kecilkan font.
+- [ ] **Notes panjang (>3 baris) tidak melimpah keluar label.** `buildLabel`
+      membatasi maksimal 3 baris notes; sisanya dipotong.
+
+> ⚠️ TSPL lewat Bluetooth **belum didukung** — jalur BLE masih ESC/POS. BP-TR110
+> pakai LAN (atau USB, yang juga belum didukung aplikasi ini).
+
 ## Koneksi
 
 | Jenis | Status | Alasan |
@@ -115,4 +165,4 @@ beserta tanggal, versi firmware, dan hasilnya:
 
 | Model | Lebar | Firmware | Tanggal | Hasil |
 | --- | --- | --- | --- | --- |
-| _(belum ada)_ | | | | |
+| Blueprint BP-TR110 (TSPL) | 20×30mm label | | | _belum diuji_ |

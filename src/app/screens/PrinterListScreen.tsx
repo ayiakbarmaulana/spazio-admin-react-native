@@ -4,7 +4,7 @@
 import { useCallback, useState } from 'react';
 import { Alert, ScrollView, Text, StyleSheet } from 'react-native';
 import { useFocusEffect, type NavigationProp } from '@react-navigation/native';
-import type { PrinterConfig } from '../../types/printing';
+import type { PrintDestination, PrinterConfig } from '../../types/printing';
 import { listPrinters, removePrinter, updatePrinter } from '../../printing/PrinterStore';
 import { transportSupport } from '../../printing/PrinterRegistry';
 import { Colors, FontSize, Spacing } from '../theme';
@@ -19,6 +19,14 @@ import {
   StatusPill,
 } from '../ui';
 import type { RootStackParamList } from '../navigation';
+
+/** Nama tampilan destinasi. Map (bukan ternary) supaya destinasi baru tidak
+ *  salah terbaca sebagai tujuan lain. */
+const DESTINATION_LABEL: Record<PrintDestination, string> = {
+  customer_receipt: 'Struk',
+  kitchen_ticket: 'Tiket Dapur',
+  label: 'Label',
+};
 
 export function PrinterListScreen({
   navigation,
@@ -82,9 +90,7 @@ export function PrinterListScreen({
               <Text style={styles.meta}>
                 {printer.paperWidthMm}mm ·{' '}
                 {printer.destinations
-                  .map(d =>
-                    d === 'customer_receipt' ? 'Struk' : 'Tiket Dapur',
-                  )
+                  .map(d => DESTINATION_LABEL[d])
                   .join(', ')}
               </Text>
 

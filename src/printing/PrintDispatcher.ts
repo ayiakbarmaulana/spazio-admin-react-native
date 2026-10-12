@@ -6,6 +6,7 @@
 
 import type {
   KitchenTicketOrder,
+  LabelOrder,
   PrintDestination,
   PrintErrorCode,
   PrintJob,
@@ -25,6 +26,7 @@ import {
 import { buildKitchenTicket } from './KitchenTicketTemplate';
 import { BlePrinterDriver } from './BlePrinterDriver';
 import { ensureBluetoothPermission } from './bluetoothPermissions';
+import { buildLabel } from './TsplTemplate';
 import { LanPrinterDriver } from './LanPrinterDriver';
 import { PrintJobRepository, type CreateJobInput } from './PrintJobRepository';
 import { statusForError, messageForError } from './PrintJobStateMachine';
@@ -72,7 +74,7 @@ export type SubmitInput = {
   orderId: string;
   destination: PrintDestination;
   printerId: string;
-  payload: ReceiptOrder | KitchenTicketOrder;
+  payload: ReceiptOrder | KitchenTicketOrder | LabelOrder;
 };
 
 export class PrintDispatcher {
@@ -238,8 +240,27 @@ export class PrintDispatcher {
     return this.finish(job.id, status, result.error);
   }
 
-  /** Render byte sesuai tujuan job dan lebar kertas printer. */
+  /** Render byte sesuai protokol printer dan tujuan job. */
   private render(job: PrintJob, printer: PrinterConfig): Uint8Array {
+    // Printer label 20×30mm (BP-TR110) bicara TSPL, bukan ESC/POS. Pilih
+    // renderer dari protocol konfigurasi, bukan dari destination — supaya
+    // destination dan bahasa perintah tidak saling terikat.
+    if (printer.protocol === 'tspl') {
+      if (job.destination !== 'label') {
+        throw new Error(
+          'Printer TSPL hanya melayani tujuan Label. Periksa tujuan cetak printer.',
+        );
+      }
+      return buildLabel(job.payload as LabelOrder);
+    }
+
+    // ESC/POS tidak punya mode label — label wajib printer TSPL.
+    if (job.destination === 'label') {
+      throw new Error(
+        'Tujuan Label butuh printer dengan protokol TSPL. Ubah protokol printer di Pengaturan Printer.',
+      );
+    }
+
     const columns = PAPER_COLUMNS[printer.paperWidthMm];
 
     if (job.destination === 'kitchen_ticket') {

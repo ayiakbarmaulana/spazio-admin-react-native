@@ -5,7 +5,11 @@
 // yang lolos ke driver TCP bisa bikin app menggantung sampai timeout. Lebih
 // baik ditolak di form.
 
-import type { PrintDestination, PrinterConfig } from '../types/printing';
+import type {
+  PrintDestination,
+  PrinterConfig,
+  PrinterProtocol,
+} from '../types/printing';
 import { DEFAULT_LAN_PORT } from '../types/printing';
 import { isTransportSupported } from './PrinterRegistry';
 
@@ -13,6 +17,8 @@ export type ConfigInput = Pick<
   PrinterConfig,
   'name' | 'connectionType' | 'host' | 'port' | 'destinations'
 > &
+  /** Protokol opsional supaya pemanggil lama (tanpa protocol) tetap type-check. */
+  Partial<Pick<PrinterConfig, 'protocol'>> &
   /** Bluetooth opsional supaya pemanggil lama (tanpa BT) tetap type-check. */
   Partial<Pick<PrinterConfig, 'bluetooth'>>;
 
@@ -70,6 +76,28 @@ export function validatePrinterConfig(input: ConfigInput): string[] {
   const uniqueDestinations = new Set<PrintDestination>(input.destinations);
   if (uniqueDestinations.size !== input.destinations.length) {
     errors.push('Tujuan cetak tidak boleh duplikat.');
+  }
+
+  // Protokol menentukan bahasa perintah. Label 20×30mm butuh TSPL — ESC/POS
+  // tidak punya mode label, jadi kombinasi ini PASTI salah cetak.
+  const protocol: PrinterProtocol = input.protocol ?? 'escpos';
+  const wantsLabel = input.destinations.includes('label');
+  if (wantsLabel && protocol !== 'tspl') {
+    errors.push(
+      'Tujuan Label butuh protokol TSPL. Pilih TSPL (printer label) di bagian Protokol.',
+    );
+  }
+  if (protocol === 'tspl' && !wantsLabel) {
+    errors.push(
+      'Printer TSPL hanya melayani tujuan Label. Centang tujuan Label atau ubah protokol ke ESC/POS.',
+    );
+  }
+  // BP-TR110 TSPL dikirim lewat LAN/USB. Jalur BLE dipakai untuk ESC/POS —
+  // jangan janjikan jalan lewat Bluetooth.
+  if (protocol === 'tspl' && input.connectionType === 'bluetooth') {
+    errors.push(
+      'Printer label TSPL belum didukung lewat Bluetooth. Gunakan LAN.',
+    );
   }
 
   if (input.connectionType === 'lan') {

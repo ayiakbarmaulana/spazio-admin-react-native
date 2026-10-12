@@ -28,6 +28,7 @@ import type {
   PaperWidthMm,
   PrintDestination,
   PrinterConnectionType,
+  PrinterProtocol,
 } from '../../types/printing';
 import { Colors, FontSize, Spacing } from '../theme';
 import { Body, Button, Card, Notice, Screen, SectionTitle } from '../ui';
@@ -36,6 +37,8 @@ import type { RootStackParamList } from '../navigation';
 type FormState = {
   name: string;
   connectionType: PrinterConnectionType;
+  /** Bahasa perintah printer: 'escpos' untuk struk, 'tspl' untuk label. */
+  protocol: PrinterProtocol;
   host: string;
   port: string;
   /** Dipakai hanya saat connectionType === 'bluetooth'. Kosong = auto-pilih. */
@@ -49,6 +52,7 @@ type FormState = {
 const INITIAL: FormState = {
   name: '',
   connectionType: 'lan',
+  protocol: 'escpos',
   host: '',
   port: String(DEFAULT_LAN_PORT),
   btDeviceId: '',
@@ -81,6 +85,7 @@ export function PrinterFormScreen() {
       setForm({
         name: printer.name,
         connectionType: printer.connectionType,
+        protocol: printer.protocol ?? 'escpos',
         host: printer.host ?? '',
         port: String(printer.port ?? DEFAULT_LAN_PORT),
         btDeviceId: printer.bluetooth?.deviceId ?? '',
@@ -108,6 +113,7 @@ export function PrinterFormScreen() {
     const input = {
       name: form.name.trim(),
       connectionType: form.connectionType,
+      protocol: form.protocol,
       // Field yang tidak relevan dikirim undefined, bukan string kosong:
       // validasi LAN memakai `.trim()` dan host '' akan ditolak dengan benar.
       host: isLan ? form.host.trim() : undefined,
@@ -179,6 +185,12 @@ export function PrinterFormScreen() {
               onChange={() => toggleDestination('kitchen_ticket')}
               testID="dest-kitchen"
             />
+            <Toggle
+              label="Label Produk (nama + varian)"
+              value={form.destinations.includes('label')}
+              onChange={() => toggleDestination('label')}
+              testID="dest-label"
+            />
 
             <SectionTitle>Lebar Kertas</SectionTitle>
             <Toggle
@@ -201,6 +213,26 @@ export function PrinterFormScreen() {
               onChange={() => setForm({ ...form, enabled: !form.enabled })}
               testID="printer-enabled"
             />
+          </Card>
+
+          <Card>
+            <SectionTitle>Protokol Printer</SectionTitle>
+            <Toggle
+              label="ESC/POS (struk 58/80mm)"
+              value={form.protocol === 'escpos'}
+              onChange={() => setForm({ ...form, protocol: 'escpos' })}
+              testID="protocol-escpos"
+            />
+            <Toggle
+              label="TSPL (printer label 20×30mm)"
+              value={form.protocol === 'tspl'}
+              onChange={() => setForm({ ...form, protocol: 'tspl' })}
+              testID="protocol-tspl"
+            />
+            <Body muted>
+              Printer label seperti Blueprint BP-TR110 memakai TSPL, bukan
+              ESC/POS. Pilih TSPL lalu centang tujuan Label Produk.
+            </Body>
           </Card>
 
           <Card>

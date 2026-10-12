@@ -41,7 +41,7 @@ Native menyuntikkan `window.SpazioNative` sebelum halaman dimuat:
 // Kirim permintaan cetak.
 const result = await window.SpazioNative.send('PRINT_REQUEST', {
   orderId: 'ord_abc123',
-  destination: 'customer_receipt',   // atau 'kitchen_ticket'
+  destination: 'customer_receipt',   // atau 'kitchen_ticket', atau 'label'
   printerId: 'prn_xyz',              // opsional
   order: { /* objek order apa adanya */ },
 });

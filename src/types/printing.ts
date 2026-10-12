@@ -4,9 +4,22 @@
 
 export type PrinterConnectionType = 'lan' | 'bluetooth' | 'usb';
 
-export type PrintDestination = 'customer_receipt' | 'kitchen_ticket';
+/**
+ * Bahasa perintah printer. BUKAN properti koneksi — printer label 20×30mm
+ * (mis. Blueprint BP-TR110) bicara TSPL/TSPL2, bukan ESC/POS, walau sama-sama
+ * dikirim mentah lewat socket TCP. Salah pilih = printer mencetak teks mentah.
+ */
+export type PrinterProtocol = 'escpos' | 'tspl';
+
+export type PrintDestination = 'customer_receipt' | 'kitchen_ticket' | 'label';
 
 export type PaperWidthMm = 58 | 80;
+
+/** Ukuran label thermal kecil (mm). BP-TR110 default 20×30. */
+export const LABEL_WIDTH_MM = 20;
+export const LABEL_HEIGHT_MM = 30;
+/** Jarak antar-label untuk sensor gap. Harus cocok dengan label fisik. */
+export const LABEL_GAP_MM = 2;
 
 /**
  * Konfigurasi printer. Satu-satunya tempat host/port hidup — bridge WebView
@@ -16,6 +29,11 @@ export type PrinterConfig = {
   id: string;
   name: string;
   connectionType: PrinterConnectionType;
+  /**
+   * Bahasa perintah printer. Default 'escpos' untuk printer lama tanpa field
+   * ini (lihat migrasi di PrinterStore). Printer label 20×30mm pakai 'tspl'.
+   */
+  protocol: PrinterProtocol;
   /** Hanya untuk connectionType "lan". IPv4 dotted-quad. */
   host?: string;
   /** Hanya untuk "lan". Default 9100. */
@@ -125,6 +143,11 @@ export type ReceiptItem = {
   quantity: number;
   priceAtOrder: number;
   note?: string | null;
+  /**
+   * Nama kategori menu (mis. "Beverage"). Diteruskan apa adanya dari WebView;
+   * dipakai WebView menyaring item label minuman, tidak dirender di struk.
+   */
+  categoryName?: string | null;
 };
 
 /**
@@ -182,6 +205,26 @@ export type KitchenTicketOrder = {
   }[];
 };
 
+/**
+ * Data satu label produk (nama + varian + notes order item).
+ *
+ * Satu job = satu label = satu order item. `variant` dan `note` dikirim apa
+ * adanya dari WebView — renderer TIDAK menghitung apa pun, hanya menata teks
+ * (aturan sama seperti struk: nominal & pilihan datang dari sumber otoritatif).
+ */
+export type LabelOrder = {
+  noreceipt: string | null;
+  /** Nama produk/menu. Dicetak paling besar. */
+  menuName: string;
+  /** Varian terpilih (mis. "Large", "Extra Shot"). Kosong = tidak dicetak. */
+  variant?: string | null;
+  /** Notes order item (mis. "tanpa gula"). Dibungkus ke beberapa baris. */
+  note?: string | null;
+  /** Kuantitas. Kalau > 1, dicetak sebagai penanda "x2". */
+  quantity?: number;
+  createdAt: string;
+};
+
 /** Hasil uji koneksi (PRD §6.6). */
 export type ConnectionTestResult = {
   ok: boolean;
@@ -208,8 +251,8 @@ export type PrintJob = {
   destination: PrintDestination;
   printerId: string;
   status: PrintJobStatus;
-  /** Payload siap-render (ReceiptOrder atau KitchenTicketOrder). */
-  payload: ReceiptOrder | KitchenTicketOrder;
+  /** Payload siap-render (ReceiptOrder, KitchenTicketOrder, atau LabelOrder). */
+  payload: ReceiptOrder | KitchenTicketOrder | LabelOrder;
   attemptCount: number;
   createdAt: string;
   updatedAt: string;

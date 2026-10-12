@@ -39,6 +39,7 @@ function printerConfig(overrides: Partial<PrinterConfig> = {}): PrinterConfig {
     id: 'prn-1',
     name: 'Printer Kasir',
     connectionType: 'lan',
+    protocol: 'escpos',
     host: '192.168.1.50',
     port: 9100,
     enabled: true,

@@ -101,6 +101,56 @@ it('jenis koneksi yang tidak didukung ditolak, bukan disimpan diam-diam', () => 
   expect(errors.some(e => /belum didukung/.test(e))).toBe(true);
 });
 
+it('tujuan Label + protokol ESC/POS ditolak — ESC/POS tak punya mode label', () => {
+  const errors = validatePrinterConfig({
+    name: 'Printer Label',
+    connectionType: 'lan',
+    host: '192.168.1.60',
+    port: 9100,
+    protocol: 'escpos',
+    destinations: ['label'],
+  });
+
+  expect(errors.some(e => /TSPL/.test(e))).toBe(true);
+});
+
+it('tujuan Label + protokol TSPL lolos', () => {
+  const errors = validatePrinterConfig({
+    name: 'BP-TR110',
+    connectionType: 'lan',
+    host: '192.168.1.60',
+    port: 9100,
+    protocol: 'tspl',
+    destinations: ['label'],
+  });
+
+  expect(errors).toEqual([]);
+});
+
+it('protokol TSPL tanpa tujuan Label ditolak — printer akan salah cetak', () => {
+  const errors = validatePrinterConfig({
+    name: 'BP-TR110',
+    connectionType: 'lan',
+    host: '192.168.1.60',
+    port: 9100,
+    protocol: 'tspl',
+    destinations: ['customer_receipt'],
+  });
+
+  expect(errors.some(e => /Label/.test(e))).toBe(true);
+});
+
+it('printer TSPL lewat Bluetooth ditolak (jalur BLE masih ESC/POS)', () => {
+  const errors = validatePrinterConfig({
+    name: 'BP-TR110 BT',
+    connectionType: 'bluetooth',
+    protocol: 'tspl',
+    destinations: ['label'],
+  });
+
+  expect(errors.some(e => /Bluetooth/.test(e))).toBe(true);
+});
+
 // ── Backoff ─────────────────────────────────────────────────────────────────
 it('backoff tumbuh eksponensial dan dibatasi maxMs', () => {
   // random() = 1 selalu → ambil batas atas, jadi pertumbuhannya terlihat.

@@ -273,12 +273,16 @@ type PrinterConnectionType =
 
 type PrintDestination =
   | "customer_receipt"
-  | "kitchen_ticket";
+  | "kitchen_ticket"
+  | "label";
+
+type PrinterProtocol = "escpos" | "tspl";
 
 interface PrinterConfig {
   id: string;
   name: string;
   connectionType: PrinterConnectionType;
+  protocol: PrinterProtocol;
   host?: string;
   port?: number;
   enabled: boolean;

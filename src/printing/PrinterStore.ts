@@ -22,7 +22,15 @@ export async function listPrinters(): Promise<PrinterConfig[]> {
     const parsed = JSON.parse(raw);
     // Data rusak dikembalikan sebagai kosong, bukan melempar — app harus tetap
     // bisa dibuka supaya pengguna bisa mendaftar ulang printernya.
-    return Array.isArray(parsed) ? (parsed as PrinterConfig[]) : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    // Printer lama belum punya `protocol`. Tanpa default ini, dispatcher akan
+    // melempar saat render karena `printer.protocol` undefined.
+    return (parsed as PrinterConfig[]).map(p => ({
+      ...p,
+      protocol: p.protocol ?? 'escpos',
+    }));
   } catch {
     return [];
   }
@@ -55,6 +63,7 @@ export async function addPrinter(input: PrinterInput): Promise<PrinterConfig> {
   const now = new Date().toISOString();
   const printer: PrinterConfig = {
     ...input,
+    protocol: input.protocol ?? 'escpos',
     id: newId('prn'),
     createdAt: now,
     updatedAt: now,
