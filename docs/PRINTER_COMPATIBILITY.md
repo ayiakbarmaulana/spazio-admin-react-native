@@ -44,7 +44,13 @@ menghasilkan kertas apa pun (ZPL/TSPL yang tidak cocok diabaikan diam-diam).
 
 Blueprint BP-TR110 (driver `BP-TR110(TSPL)`) bicara **TSPL**, bukan ESC/POS —
 walau sama-sama dikirim mentah lewat socket TCP port 9100. Yang dicetak: label
-produk 20×30mm berisi nama produk, varian, dan notes order item.
+produk 20×30mm berisi nomor antrian, nama produk, varian, notes, dan nama
+pelanggan.
+
+**Satu label = satu porsi.** Item berkuantitas N dicetak sebagai **N label
+terpisah**, masing-masing tanpa penanda `Nx`. Kuantitas di-expand di WebView
+(`spazio-admin/lib/label-items.ts`, `beverageLabelItems`) jadi N PRINT_REQUEST
+berkuantitas 1 — renderer native tidak tahu-menahu soal kuantitas.
 
 Skrip yang dihasilkan `buildLabel()`:
 
@@ -81,6 +87,9 @@ Zebra, Argox dalam mode ZPL, TSC dalam mode ZPL, dan sebagian BP-TR110 dengan
 firmware ZPL bicara **ZPL II** — bukan TSPL. Bedanya bukan cuma nama: ZPL
 mengirim satu aliran perintah yang diawali `^XA` dan diakhiri `^XZ`, dan printer
 langsung mencetak saat `^XZ` diterima (tidak ada baris "PRINT").
+
+Aturan kuantitas sama dengan TSPL: **satu label = satu porsi**, tanpa penanda
+`Nx` (ekspansi di WebView, lihat bagian TSPL di atas).
 
 Skrip yang dihasilkan `buildLabel()` di `src/printing/ZplTemplate.ts`:
 

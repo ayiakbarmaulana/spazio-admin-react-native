@@ -235,9 +235,19 @@ export type LabelOrder = {
   variant?: string | null;
   /** Notes order item (mis. "tanpa gula"). Dibungkus ke beberapa baris. */
   note?: string | null;
-  /** Kuantitas. Kalau > 1, dicetak sebagai penanda "x2". */
+  /**
+   * Kuantitas. SENGAJA DIABAIKAN renderer: satu label = satu porsi, karena
+   * WebView sudah men-expand baris berkuantitas N jadi N job label terpisah
+   * (lib/label-items.ts). Field tetap ada demi payload lama di antrean.
+   */
   quantity?: number;
   createdAt: string;
+  /**
+   * Nama pelanggan (opsional). Baris terakhir label. Nomor antrian TIDAK di
+   * sini — dia dibaca dari `noreceipt` lewat `queueLabel` (satu sumber
+   * kebenaran, sama seperti struk), jadi label tidak butuh field angka sendiri.
+   */
+  customerName?: string | null;
 };
 
 /** Hasil uji koneksi (PRD §6.6). */

@@ -135,6 +135,7 @@ export function PrinterDiagnosticsScreen() {
       menuName: 'Halaman Uji',
       variant: printer.protocol === 'zpl' ? 'ZPL · 20×30mm' : 'BP-TR110 · 20×30mm',
       note: 'Ini label uji. Bukan transaksi nyata.',
+      customerName: 'Pelanggan Uji',
       createdAt: new Date().toISOString(),
     };
     const sampleBytes =

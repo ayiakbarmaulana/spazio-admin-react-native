@@ -3,10 +3,11 @@
 // Yang dijaga:
 //  1. Diawali ^XA dan diakhiri ^XZ — tanpa ^XZ printer menahan job.
 //  2. Ukuran label ^PW/^LL ada — tanpa itu potongan kertas kacau.
-//  3. Nama + varian + notes benar-benar tercetak.
-//  4. Harga TIDAK pernah muncul di label.
-//  5. Tidak ada "undefined"/"null" bocor ke kertas.
-//  6. Karakter pengontrol ^ dan ~ di-escape, tidak memutus perintah.
+//  3. Urutan baris: antrian → nama → varian → notes → nama pelanggan.
+//  4. Nomor antrian dibaca dari noreceipt (INV-YYYYMMDD-N), bukan field sendiri.
+//  5. Harga TIDAK pernah muncul di label.
+//  6. Tidak ada "undefined"/"null" bocor ke kertas.
+//  7. Karakter pengontrol ^ dan ~ di-escape, tidak memutus perintah.
 
 import { buildLabel } from '../../src/printing/ZplTemplate';
 import type { LabelOrder } from '../../src/types/printing';
@@ -15,13 +16,25 @@ function script(order: LabelOrder): string {
   return new TextDecoder().decode(buildLabel(order));
 }
 
+/** Urutan nilai ^FD dari atas ke bawah — sumbu Y kecil dulu. */
+function fieldTexts(text: string): { y: number; text: string }[] {
+  return text
+    .split('\r\n')
+    .flatMap((l) => {
+      const f = /^\^FO\d+,(\d+).*\^FD(.*)\^FS$/.exec(l);
+      return f ? [{ y: Number(f[1]), text: f[2] }] : [];
+    })
+    .sort((a, b) => a.y - b.y);
+}
+
 const BASE: LabelOrder = {
-  noreceipt: 'SPZ-777',
+  noreceipt: 'INV-20261013-7',
   menuName: 'Kopi Susu',
   variant: 'Large',
   note: 'tanpa gula',
   quantity: 2,
   createdAt: new Date('2026-10-12T10:00:00Z').toISOString(),
+  customerName: 'Budi',
 };
 
 it('dimulai ^XA dan diakhiri ^XZ — tanpa ^XZ label tidak keluar', () => {
@@ -38,17 +51,66 @@ it('memuat ukuran label: lebar cetak 30mm (240 dots) & feed 20mm (160 dots)', ()
   expect(text).toContain('^LL160');
 });
 
-it('mencetak nama, varian, dan notes', () => {
+it('mencetak antrian, nama, varian, notes, dan nama pelanggan', () => {
   const text = script(BASE);
+  expect(text).toContain('Antrian #7');
   expect(text).toContain('Kopi Susu');
   expect(text).toContain('Large');
   expect(text).toContain('tanpa gula');
-  // Kuantitas > 1 jadi penanda "2x".
-  expect(text).toContain('2x');
+  expect(text).toContain('Budi');
 });
 
-it('nomor order ikut tercetak', () => {
-  expect(script(BASE)).toContain('SPZ-777');
+// ── Satu label = satu porsi: TIDAK ada penanda kuantitas ────────────────────
+// Bug asli: qty 2 dikirim sebagai satu label bertuliskan "2x Kopi Susu".
+// Kuantitas kini di-expand WebView (lib/label-items.ts) jadi label terpisah.
+it('tidak pernah mencetak penanda kuantitas "Nx" di label', () => {
+  for (const quantity of [1, 2, 3, 12]) {
+    const text = script({ ...BASE, quantity });
+    expect(text).not.toContain('2x');
+    expect(text).toContain('Kopi Susu');
+    // Nama produk dicetak apa adanya, tanpa awalan qty.
+    expect(text).toMatch(/\^FDKopi Susu\^FS/);
+  }
+});
+
+// ── Urutan yang diminta: Antrian # → Nama Item → Variant → Customer ─────────
+it('urutan baris: Antrian #, Nama Item, Variant, Notes, Customer', () => {
+  const texts = fieldTexts(script(BASE)).map((f) => f.text);
+  expect(texts.indexOf('Antrian #7')).toBe(0);
+  expect(texts.indexOf('Kopi Susu')).toBe(1);
+  expect(texts.indexOf('Large')).toBeLessThan(texts.indexOf('tanpa gula'));
+  expect(texts.indexOf('tanpa gula')).toBeLessThan(texts.indexOf('Budi'));
+});
+
+it('customerName tercetak; null/kosong menghilangkan barisnya', () => {
+  expect(script(BASE)).toContain('Budi');
+  for (const customerName of [null, undefined, '   ', '']) {
+    const text = script({ ...BASE, customerName });
+    expect(text).not.toContain('null');
+    expect(text).not.toContain('undefined');
+    expect(text).not.toContain('Budi');
+  }
+});
+
+// ── Nomor antrian: satu sumber kebenaran, bukan field tersendiri ────────────
+it('noreceipt non-pola (SPZ-777) tidak mencetak blok antrian', () => {
+  const text = script({ ...BASE, noreceipt: 'SPZ-777' });
+  expect(text).not.toContain('Antrian');
+  expect(text).not.toContain('#null');
+  expect(text).not.toContain('#undefined');
+});
+
+it('noreceipt null/kosong tidak mencetak blok antrian', () => {
+  for (const noreceipt of [null, '']) {
+    const text = script({ ...BASE, noreceipt });
+    expect(text).not.toContain('Antrian');
+  }
+});
+
+it('noreceipt asli tetap tidak bocor mentah ke label (hanya antriannya)', () => {
+  const text = script(BASE);
+  expect(text).not.toContain('INV-20261013-7');
+  expect(text).toContain('Antrian #7');
 });
 
 it('varian dan notes kosong tidak mengotori label', () => {
@@ -94,19 +156,21 @@ it('tidak ada field yang menempel tepi atas atau bawah label', () => {
   expect(Math.max(...ys)).toBeLessThanOrEqual(148);
 });
 
-it('notes panjang + noreceipt tidak saling menimpa dan tetap di dalam label', () => {
+it('label paling padat (5 baris) tetap muat di ^LL160', () => {
+  const text = script(BASE);
+  const fields = fieldTexts(text);
+  // Antrian, nama, varian, notes, customer — semuanya ikut kursor.
+  expect(fields.length).toBe(5);
+  for (const f of fields) {
+    // Font terakhir (14 dots) + margin 24 harus tetap di dalam feed 20mm.
+    expect(f.y + 14).toBeLessThanOrEqual(160 - 24);
+  }
+});
+
+it('notes panjang + blok lengkap tidak saling menimpa dan tetap di dalam label', () => {
   const text = script({ ...BASE, note: 'a '.repeat(80).trim() });
-  const fields = text
-    .split('\r\n')
-    .filter((l) => l.includes('^FD'))
-    .map((l) => ({
-      y: Number(/\^FO\d+,(\d+)/.exec(l)?.[1] ?? -1),
-      text: /\^FD(.*)\^FS$/.exec(l)?.[1] ?? '',
-    }));
-  const receipt = fields.find((f) => f.text === 'SPZ-777');
-  expect(receipt).toBeDefined();
-  // Nomor order duduk di bawah notes dan tidak lebih dekat dari 12 dots ke tepi.
-  expect(receipt!.y).toBeLessThanOrEqual(148);
+  const fields = fieldTexts(text);
+  expect(fields.length).toBeGreaterThan(0);
   // Tidak ada field yang mulai tepat di tepi (>= ^LL) → tidak ada yang terpotong.
   for (const f of fields) {
     expect(f.y).toBeLessThan(160 - 11);

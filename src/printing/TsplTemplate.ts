@@ -9,6 +9,7 @@
 // ATURAN: renderer tidak menghitung apa pun. Varian & notes datang apa adanya
 // dari payload order. Satu job = satu label.
 
+import { queueLabel } from './queueNumber';
 import type { LabelOrder } from '../types/printing';
 import {
   LABEL_GAP_MM,
@@ -74,10 +75,10 @@ function centeredX(text: string, charWidth: number): number {
 /**
  * Bangun skrip TSPL untuk satu label produk.
  *
- * Susunan: nama produk (font besar, tengah), varian, notes, nomor order kecil.
- * Tinggi label 30mm = 240 dots @203dpi — cukup untuk satu nama + beberapa
- * baris kecil. Varian/notes yang kepanjangan dipotong di batas baris (TSPL
- * tidak punya overflow otomatis).
+ * Susunan (atas → bawah): nomor antrian (kalau `noreceipt` berpola
+ * `INV-YYYYMMDD-N`), nama produk (font terbesar), varian, notes, nama
+ * pelanggan. Tinggi label 30mm = 240 dots @203dpi. Varian/notes yang
+ * kepanjangan dipotong di batas baris (TSPL tidak punya overflow otomatis).
  */
 export function buildLabel(order: LabelOrder): Uint8Array {
   const lines: string[] = [
@@ -89,17 +90,29 @@ export function buildLabel(order: LabelOrder): Uint8Array {
 
   let y = 6;
 
+  // ── Antrian (opsional) ─────────────────────────────────────────────────────
+  // Nomor datang dari `noreceipt` (INV-YYYYMMDD-N). Receipt gaya lama seperti
+  // "SPZ-777" tidak cocok pola → blok hilang, bukan mencetak "#null".
+  const antrian = queueLabel(order.noreceipt);
+  if (antrian) {
+    lines.push(
+      `TEXT ${centeredX(antrian, CHAR_W_NOTE)},${y},${tsplString(FONT_NOTE)},0,1,1,${tsplString(antrian)}`,
+    );
+    y += 16;
+  }
+
   // ── Nama produk ────────────────────────────────────────────────────────────
+  // Satu label = satu porsi: penanda "2x" sudah dihapus dari renderer. Kuantitas
+  // di-expand di WebView (lib/label-items.ts) jadi label terpisah, jadi
+  // `order.quantity` sengaja diabaikan di sini.
   const nameMax = Math.max(1, Math.floor((LABEL_WIDTH_DOTS - 8) / CHAR_W_NAME));
   const nameLines = wrapText(order.menuName, nameMax).slice(0, 2);
-  const qty = order.quantity && order.quantity > 1 ? `${order.quantity}x ` : '';
-  nameLines.forEach((line, i) => {
-    const text = i === 0 ? qty + line : line;
+  for (const line of nameLines) {
     lines.push(
-      `TEXT ${centeredX(text, CHAR_W_NAME)},${y},${tsplString(FONT_NAME)},0,1,1,${tsplString(text)}`,
+      `TEXT ${centeredX(line, CHAR_W_NAME)},${y},${tsplString(FONT_NAME)},0,1,1,${tsplString(line)}`,
     );
     y += 30;
-  });
+  }
 
   // ── Varian ─────────────────────────────────────────────────────────────────
   if (order.variant && order.variant.trim()) {
@@ -121,7 +134,9 @@ export function buildLabel(order: LabelOrder): Uint8Array {
       1,
       Math.floor((LABEL_WIDTH_DOTS - 8) / CHAR_W_NOTE),
     );
-    for (const line of wrapText(order.note.trim(), noteMax).slice(0, 3)) {
+    // Dibatasi 2 baris: tinggi label 240 dots sudah dipakai antrian, nama,
+    // varian, dan nama pelanggan.
+    for (const line of wrapText(order.note.trim(), noteMax).slice(0, 2)) {
       lines.push(
         `TEXT 4,${y},${tsplString(FONT_NOTE)},0,1,1,${tsplString(line)}`,
       );
@@ -129,11 +144,18 @@ export function buildLabel(order: LabelOrder): Uint8Array {
     }
   }
 
-  // ── Nomor order kecil di bawah (opsional) ──────────────────────────────────
-  if (order.noreceipt) {
-    lines.push(
-      `TEXT 4,${LABEL_HEIGHT_MM * DOTS_PER_MM - 18},${tsplString(FONT_NOTE)},0,1,1,${tsplString(order.noreceipt)}`,
+  // ── Nama pelanggan ─────────────────────────────────────────────────────────
+  if (order.customerName && order.customerName.trim()) {
+    const customerMax = Math.max(
+      1,
+      Math.floor((LABEL_WIDTH_DOTS - 8) / CHAR_W_NOTE),
     );
+    for (const line of wrapText(order.customerName.trim(), customerMax).slice(0, 2)) {
+      lines.push(
+        `TEXT ${centeredX(line, CHAR_W_NOTE)},${y},${tsplString(FONT_NOTE)},0,1,1,${tsplString(line)}`,
+      );
+      y += 16;
+    }
   }
 
   lines.push('PRINT 1,1');
