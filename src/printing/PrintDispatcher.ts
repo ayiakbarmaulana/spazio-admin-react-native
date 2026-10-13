@@ -23,10 +23,12 @@ import {
   DEFAULT_WRITE_TIMEOUT_MS,
   PAPER_COLUMNS,
 } from '../types/printing';
+import { isLabelProtocol } from '../types/printing';
 import { buildKitchenTicket } from './KitchenTicketTemplate';
 import { BlePrinterDriver } from './BlePrinterDriver';
 import { ensureBluetoothPermission } from './bluetoothPermissions';
 import { buildLabel } from './TsplTemplate';
+import { buildLabel as buildZplLabel } from './ZplTemplate';
 import { LanPrinterDriver } from './LanPrinterDriver';
 import { PrintJobRepository, type CreateJobInput } from './PrintJobRepository';
 import { statusForError, messageForError } from './PrintJobStateMachine';
@@ -242,22 +244,24 @@ export class PrintDispatcher {
 
   /** Render byte sesuai protokol printer dan tujuan job. */
   private render(job: PrintJob, printer: PrinterConfig): Uint8Array {
-    // Printer label 20×30mm (BP-TR110) bicara TSPL, bukan ESC/POS. Pilih
+    // Printer label 20×30mm bicara TSPL atau ZPL, bukan ESC/POS. Pilih
     // renderer dari protocol konfigurasi, bukan dari destination — supaya
     // destination dan bahasa perintah tidak saling terikat.
-    if (printer.protocol === 'tspl') {
+    if (isLabelProtocol(printer.protocol)) {
       if (job.destination !== 'label') {
         throw new Error(
-          'Printer TSPL hanya melayani tujuan Label. Periksa tujuan cetak printer.',
+          `Printer ${printer.protocol.toUpperCase()} hanya melayani tujuan Label. Periksa tujuan cetak printer.`,
         );
       }
-      return buildLabel(job.payload as LabelOrder);
+      return printer.protocol === 'zpl'
+        ? buildZplLabel(job.payload as LabelOrder)
+        : buildLabel(job.payload as LabelOrder);
     }
 
-    // ESC/POS tidak punya mode label — label wajib printer TSPL.
+    // ESC/POS tidak punya mode label — label wajib printer TSPL/ZPL.
     if (job.destination === 'label') {
       throw new Error(
-        'Tujuan Label butuh printer dengan protokol TSPL. Ubah protokol printer di Pengaturan Printer.',
+        'Tujuan Label butuh printer dengan protokol TSPL atau ZPL. Ubah protokol printer di Pengaturan Printer.',
       );
     }
 

@@ -151,6 +151,57 @@ it('printer TSPL lewat Bluetooth ditolak (jalur BLE masih ESC/POS)', () => {
   expect(errors.some(e => /Bluetooth/.test(e))).toBe(true);
 });
 
+// ── Protokol ZPL: label only, LAN only ─────────────────────────────────────
+it('tujuan Label + protokol ZPL lolos', () => {
+  const errors = validatePrinterConfig({
+    name: 'Zebra ZD230',
+    connectionType: 'lan',
+    host: '192.168.1.61',
+    port: 9100,
+    protocol: 'zpl',
+    destinations: ['label'],
+  });
+
+  expect(errors).toEqual([]);
+});
+
+it('protokol ZPL tanpa tujuan Label ditolak — printer akan salah cetak', () => {
+  const errors = validatePrinterConfig({
+    name: 'Zebra ZD230',
+    connectionType: 'lan',
+    host: '192.168.1.61',
+    port: 9100,
+    protocol: 'zpl',
+    destinations: ['customer_receipt'],
+  });
+
+  expect(errors.some(e => /ZPL/.test(e))).toBe(true);
+  expect(errors.some(e => /Label/.test(e))).toBe(true);
+});
+
+it('printer ZPL lewat Bluetooth ditolak (jalur BLE masih ESC/POS)', () => {
+  const errors = validatePrinterConfig({
+    name: 'Zebra BT',
+    connectionType: 'bluetooth',
+    protocol: 'zpl',
+    destinations: ['label'],
+  });
+
+  expect(errors.some(e => /Bluetooth/.test(e))).toBe(true);
+});
+
+it('tujuan Label tanpa protokol label tetap ditolak, pesannya sebut TSPL dan ZPL', () => {
+  const errors = validatePrinterConfig({
+    name: 'Printer Label',
+    connectionType: 'lan',
+    host: '192.168.1.62',
+    port: 9100,
+    destinations: ['label'],
+  });
+
+  expect(errors.some(e => /TSPL/.test(e) && /ZPL/.test(e))).toBe(true);
+});
+
 // ── Backoff ─────────────────────────────────────────────────────────────────
 it('backoff tumbuh eksponensial dan dibatasi maxMs', () => {
   // random() = 1 selalu → ambil batas atas, jadi pertumbuhannya terlihat.

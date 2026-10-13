@@ -6,10 +6,24 @@ export type PrinterConnectionType = 'lan' | 'bluetooth' | 'usb';
 
 /**
  * Bahasa perintah printer. BUKAN properti koneksi — printer label 20×30mm
- * (mis. Blueprint BP-TR110) bicara TSPL/TSPL2, bukan ESC/POS, walau sama-sama
- * dikirim mentah lewat socket TCP. Salah pilih = printer mencetak teks mentah.
+ * bicara TSPL/TSPL2 (mis. Blueprint BP-TR110) atau ZPL/ZPL II (Zebra, Argox,
+ * TSC mode ZPL, dsb), bukan ESC/POS — walau sama-sama dikirim mentah lewat
+ * socket TCP. Salah pilih = printer meng-ack job tapi tidak ada kertas keluar.
+ *
+ * 'tspl' dan 'zpl' HANYA melayani tujuan `label`; keduanya lewat LAN.
  */
-export type PrinterProtocol = 'escpos' | 'tspl';
+export type PrinterProtocol = 'escpos' | 'tspl' | 'zpl';
+
+/**
+ * Protokol yang melayani label 20×30mm. Dipakai validasi & dispatcher supaya
+ * aturan label tidak diduplikasi di dua tempat.
+ */
+export const LABEL_PROTOCOLS: readonly PrinterProtocol[] = ['tspl', 'zpl'];
+
+/** true kalau protokol ini hanya bisa mencetak label (bukan struk/tiket). */
+export function isLabelProtocol(protocol: PrinterProtocol): boolean {
+  return LABEL_PROTOCOLS.includes(protocol);
+}
 
 export type PrintDestination = 'customer_receipt' | 'kitchen_ticket' | 'label';
 
@@ -31,7 +45,8 @@ export type PrinterConfig = {
   connectionType: PrinterConnectionType;
   /**
    * Bahasa perintah printer. Default 'escpos' untuk printer lama tanpa field
-   * ini (lihat migrasi di PrinterStore). Printer label 20×30mm pakai 'tspl'.
+   * ini (lihat migrasi di PrinterStore). Printer label 20×30mm pakai 'tspl'
+   * atau 'zpl' sesuai yang dicetak di halaman konfigurasi printer.
    */
   protocol: PrinterProtocol;
   /** Hanya untuk connectionType "lan". IPv4 dotted-quad. */

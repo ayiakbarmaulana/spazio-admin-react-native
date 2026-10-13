@@ -17,7 +17,7 @@
 │  ┌──────────────────────────┐      ┌───────────────────────┐   │
 │  │ BridgeHandler            │      │ PrintDispatcher       │   │
 │  │ • dedup requestId        │─────▶│ • validasi konfigurasi│   │
-│  │ • validasi payload       │      │ • render ESC/POS/TSPL │   │
+│  │ • validasi payload       │      │ • render ESC/POS/TSPL/ZPL │   │
 │  └────────────┬─────────────┘      └───────────┬───────────┘   │
 │               │                                │               │
 │               ▼                                ▼               │
@@ -37,7 +37,7 @@
                                                  ▼
                                        Printer ESC/POS LAN
                                        (192.168.x.x:9100)
-                                       atau printer TSPL (label)
+                                       atau printer label TSPL/ZPL
 ```
 
 ## Alur cetak satu struk

@@ -229,9 +229,16 @@ export function PrinterFormScreen() {
               onChange={() => setForm({ ...form, protocol: 'tspl' })}
               testID="protocol-tspl"
             />
+            <Toggle
+              label="ZPL (printer label 20×30mm)"
+              value={form.protocol === 'zpl'}
+              onChange={() => setForm({ ...form, protocol: 'zpl' })}
+              testID="protocol-zpl"
+            />
             <Body muted>
-              Printer label seperti Blueprint BP-TR110 memakai TSPL, bukan
-              ESC/POS. Pilih TSPL lalu centang tujuan Label Produk.
+              Printer label memakai TSPL (mis. Blueprint BP-TR110) atau ZPL
+              (mis. Zebra, Argox) — bukan ESC/POS. Lihat protokol yang tertulis
+              di halaman konfigurasi printer, lalu centang tujuan Label Produk.
             </Body>
           </Card>
 

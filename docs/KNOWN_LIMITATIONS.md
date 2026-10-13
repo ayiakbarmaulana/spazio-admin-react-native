@@ -30,6 +30,8 @@ Konsekuensi yang harus dihadapi:
 | Fitur | Alasan |
 | --- | --- |
 | BLE di luar profil ISSC | Driver mencoba ISSC Transparent UART lalu karakteristik tulis pertama; printer dengan handshake vendor khusus masih bisa gagal dengan `CHARACTERISTIC_NOT_FOUND` |
+| Printer label (TSPL/ZPL) lewat Bluetooth | Jalur BLE masih ESC/POS saja; label dikirim lewat LAN |
+| Printer label 300dpi | Dots ZPL/TSPL dipatok 203dpi (8 dots/mm); label 300dpi akan berukuran ⅔ dari seharusnya |
 | BLE tanpa izin runtime Android 12+ | Aplikasi meminta `BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT` lewat `src/printing/bluetoothPermissions.ts` saat Uji Koneksi atau mencetak. Kalau ditolak, `BLUETOOTH_PERMISSION_DENIED` |
 | USB / OTG | Butuh driver USB host dan negosiasi endpoint per model |
 | iOS | Belum ada jalur cetak; `ios/` masih dari template |

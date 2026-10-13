@@ -10,7 +10,7 @@ import type {
   PrinterConfig,
   PrinterProtocol,
 } from '../types/printing';
-import { DEFAULT_LAN_PORT } from '../types/printing';
+import { DEFAULT_LAN_PORT, isLabelProtocol } from '../types/printing';
 import { isTransportSupported } from './PrinterRegistry';
 
 export type ConfigInput = Pick<
@@ -78,25 +78,27 @@ export function validatePrinterConfig(input: ConfigInput): string[] {
     errors.push('Tujuan cetak tidak boleh duplikat.');
   }
 
-  // Protokol menentukan bahasa perintah. Label 20×30mm butuh TSPL — ESC/POS
-  // tidak punya mode label, jadi kombinasi ini PASTI salah cetak.
+  // Protokol menentukan bahasa perintah. Label 20×30mm butuh TSPL atau ZPL —
+  // ESC/POS tidak punya mode label, jadi kombinasi ini PASTI salah cetak
+  // (printer meng-ack job lalu tidak ada kertas keluar).
   const protocol: PrinterProtocol = input.protocol ?? 'escpos';
   const wantsLabel = input.destinations.includes('label');
-  if (wantsLabel && protocol !== 'tspl') {
+  const labelProtocol = isLabelProtocol(protocol);
+  if (wantsLabel && !labelProtocol) {
     errors.push(
-      'Tujuan Label butuh protokol TSPL. Pilih TSPL (printer label) di bagian Protokol.',
+      'Tujuan Label butuh protokol TSPL atau ZPL. Pilih TSPL (BP-TR110) atau ZPL (Zebra/Argox) di bagian Protokol.',
     );
   }
-  if (protocol === 'tspl' && !wantsLabel) {
+  if (labelProtocol && !wantsLabel) {
     errors.push(
-      'Printer TSPL hanya melayani tujuan Label. Centang tujuan Label atau ubah protokol ke ESC/POS.',
+      `Printer ${protocol.toUpperCase()} hanya melayani tujuan Label. Centang tujuan Label atau ubah protokol ke ESC/POS.`,
     );
   }
-  // BP-TR110 TSPL dikirim lewat LAN/USB. Jalur BLE dipakai untuk ESC/POS —
+  // Printer label dikirim lewat LAN/USB. Jalur BLE dipakai untuk ESC/POS —
   // jangan janjikan jalan lewat Bluetooth.
-  if (protocol === 'tspl' && input.connectionType === 'bluetooth') {
+  if (labelProtocol && input.connectionType === 'bluetooth') {
     errors.push(
-      'Printer label TSPL belum didukung lewat Bluetooth. Gunakan LAN.',
+      `Printer label ${protocol.toUpperCase()} belum didukung lewat Bluetooth. Gunakan LAN.`,
     );
   }
 

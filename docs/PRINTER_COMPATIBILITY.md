@@ -9,20 +9,36 @@ didukung, bukan perangkat yang sudah diverifikasi.
 Menguji pada perangkat asli adalah item pertama di daftar pekerjaan yang belum
 selesai. Lihat [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md).
 
-## Bahasa perintah: ESC/POS vs TSPL
+## Bahasa perintah: ESC/POS vs TSPL vs ZPL
 
 Printer thermal tidak semuanya bicara bahasa yang sama. Aplikasi ini mendukung
-dua protokol, dipilih eksplisit per printer di **Pengaturan Printer → Protokol
+tiga protokol, dipilih eksplisit per printer di **Pengaturan Printer → Protokol
 Printer**:
 
 | Protokol | Untuk | Renderer | Koneksi |
 | --- | --- | --- | --- |
 | **ESC/POS** | Struk 58/80mm, tiket dapur | `src/printing/EscPosRenderer.ts` | LAN, Bluetooth |
 | **TSPL/TSPL2** | Label produk 20×30mm | `src/printing/TsplTemplate.ts` | LAN |
+| **ZPL/ZPL II** | Label produk 20×30mm | `src/printing/ZplTemplate.ts` | LAN |
 
-Salah pilih protokol = printer mencetak teks mentah (perintah "SIZE 20 mm,30 mm"
-tercetak apa adanya). Validasi (`validatePrinterConfig`) menolak kombinasi yang
-pasti salah: tujuan `label` tanpa protokol TSPL, dan TSPL tanpa tujuan `label`.
+Salah pilih protokol = printer meng-ack job tapi tidak ada kertas keluar
+(job tampak "terkirim", label tetap kosong). Validasi
+(`validatePrinterConfig`) menolak kombinasi yang pasti salah: tujuan `label`
+tanpa protokol label, dan protokol label tanpa tujuan `label`.
+
+### Cara memilih protokol yang benar
+
+Protokol tertulis di **halaman konfigurasi printer** (biasanya dicetak dengan
+menahan tombol feed saat printer dinyalakan). Ciri yang membedakan:
+
+- Halaman konfigurasi/self-test menampilkan `TSPL` atau `TSPL2` → pilih TSPL.
+- Menampilkan `ZPL`, `ZPL II`, atau model Zebra/Argox/TSC mode ZPL → pilih ZPL.
+- Halaman konfigurasi tidak menyebut protokol sama sekali, tapi ada di daftar
+  driver Windows sebagai "(TSPL)" atau "(ZPL)" → ikuti nama driver itu.
+
+Kalau tetap ragu: cetak halaman uji dari **Uji Koneksi** dengan masing-masing
+protokol label. Yang benar menghasilkan label tercetak; yang salah tidak
+menghasilkan kertas apa pun (ZPL/TSPL yang tidak cocok diabaikan diam-diam).
 
 ## Printer label BP-TR110 (TSPL)
 
@@ -58,6 +74,66 @@ PRINT 1,1
 
 > ⚠️ TSPL lewat Bluetooth **belum didukung** — jalur BLE masih ESC/POS. BP-TR110
 > pakai LAN (atau USB, yang juga belum didukung aplikasi ini).
+
+## Printer label ZPL (ZPL II)
+
+Zebra, Argox dalam mode ZPL, TSC dalam mode ZPL, dan sebagian BP-TR110 dengan
+firmware ZPL bicara **ZPL II** — bukan TSPL. Bedanya bukan cuma nama: ZPL
+mengirim satu aliran perintah yang diawali `^XA` dan diakhiri `^XZ`, dan printer
+langsung mencetak saat `^XZ` diterima (tidak ada baris "PRINT").
+
+Skrip yang dihasilkan `buildLabel()` di `src/printing/ZplTemplate.ts`:
+
+```
+^XA
+^CI28
+^PW240
+^LL160
+^MNY
+^PR4
+^FO0,y^A0N,22,22^FB240,1,0,C,0^FD<nama produk>^FS
+^FO0,y^A0N,18,18^FB240,1,0,C,0^FD<varian>^FS
+^FO4,y^A0N,14,14^FB240,3,0,C,0^FD<notes>^FS
+^FO4,y^A0N,14,14^FB240,1,0,C,0^FD<noreceipt>^FS
+^XZ
+```
+
+> ⚠️ **Sumbu ZPL BP-TR110 kebalikan TSPL.** Media 20×30mm dimuat dengan sisi
+> 30mm melintang kepala cetak, jadi `^PW` = 30mm (240 dots) dan `^LL` = 20mm
+> (160 dots). TSPL memakai `SIZE 20 mm,30 mm` — jangan disamakan. Ini sudah
+> diverifikasi di printer fisik: `^PW240 ^LL160` tegak & utuh; `^PW160 ^LL240`
+> terbalik dan terpotong di tepi.
+
+| Perintah | Arti |
+| --- | --- |
+| `^XA` / `^XZ` | Buka / tutup format — `^XZ` juga memicu cetak |
+| `^CI28` | Code page UTF-8, supaya huruf non-ASCII tidak jadi sampah |
+| `^PW240` / `^LL160` | Lebar cetak 30mm / panjang feed 20mm dalam dots @203dpi |
+| `^MNY` | Media non-kontinu (label bergap) |
+| `^PR4` | Kecepatan cetak sedang |
+| `^FO x,y` | Titik awal field |
+| `^A0N,h,w` | Font scalable A0 (device-independent), tinggi & lebar dalam dots |
+| `^FB w,lines,,C,` | Blok teks: lebar, batas baris, perataan tengah (printer yang membungkus) |
+| `^FD ... ^FS` | Isi field, lalu tutup |
+
+### Checklist uji fisik (tidak bisa diverifikasi dari kode)
+
+- [ ] **`^PW240`/`^LL160` cocok dengan label fisik** (sumbu ZPL kebalikan TSPL:
+      lebar cetak 30mm, feed 20mm). Untuk printer 300dpi, kalikan dots dengan
+      300/203 (354×236) — saat ini nilainya masih dipatok 203dpi.
+- [ ] **`^MNY` (non-kontinu) cocok dengan media.** Untuk label kontinu, ganti
+      jadi `^MNN` atau hapus barisnya sesuai manual printer.
+- [ ] **Konten tidak menempel tepi atas/bawah.** Margin 20 dots di kedua sisi
+      (`TOP_MARGIN_DOTS`/`BOTTOM_MARGIN_DOTS`); `noreceipt` ikut kursor, bukan
+      dipatok dari dasar label.
+- [ ] **Font `A0` benar-benar dirender.** Sebagian printer ZPL lama hanya punya
+      font bitmap; kalau label kosong padahal `^XZ` terkirim, ganti `^A0N,h,w`
+      menjadi font bitmap (`^A@N,h,w,<file>`) sesuai manual printer.
+- [ ] **Notes panjang (>3 baris) tidak melimpah keluar label.** `^FB` dibatasi
+      3 baris untuk notes; sisanya dibuang printer, bukan dicetak keluar label.
+
+> ⚠️ ZPL lewat Bluetooth **belum didukung**, sama seperti TSPL — jalur BLE masih
+> ESC/POS. Pakai LAN.
 
 ## Koneksi
 
@@ -166,3 +242,4 @@ beserta tanggal, versi firmware, dan hasilnya:
 | Model | Lebar | Firmware | Tanggal | Hasil |
 | --- | --- | --- | --- | --- |
 | Blueprint BP-TR110 (TSPL) | 20×30mm label | | | _belum diuji_ |
+| Zebra / ZPL II generic | 20×30mm label | | | _belum diuji_ |

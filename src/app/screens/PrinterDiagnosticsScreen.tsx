@@ -15,6 +15,7 @@ import { LanPrinterDriver } from '../../printing/LanPrinterDriver';
 import type { PrinterTransport } from '../../printing/PrinterTransport';
 import { buildReceipt } from '../../printing/ReceiptTemplate';
 import { buildLabel } from '../../printing/TsplTemplate';
+import { buildLabel as buildZplLabel } from '../../printing/ZplTemplate';
 import type { PrintJobError, PrinterConfig } from '../../types/printing';
 import {
   DEFAULT_BLUETOOTH_CONNECT_TIMEOUT_MS,
@@ -129,15 +130,18 @@ export function PrinterDiagnosticsScreen() {
 
     // Halaman uji memakai bahasa perintah yang SAMA dengan cetak nyata —
     // kirim ESC/POS ke printer label akan keluar sebagai teks mentah.
+    const sampleLabel = {
+      noreceipt: 'TES-PRINTER',
+      menuName: 'Halaman Uji',
+      variant: printer.protocol === 'zpl' ? 'ZPL · 20×30mm' : 'BP-TR110 · 20×30mm',
+      note: 'Ini label uji. Bukan transaksi nyata.',
+      createdAt: new Date().toISOString(),
+    };
     const sampleBytes =
-      printer.protocol === 'tspl'
-        ? buildLabel({
-            noreceipt: 'TES-PRINTER',
-            menuName: 'Halaman Uji',
-            variant: 'BP-TR110 · 20×30mm',
-            note: 'Ini label uji. Bukan transaksi nyata.',
-            createdAt: new Date().toISOString(),
-          })
+      printer.protocol === 'zpl'
+        ? buildZplLabel(sampleLabel)
+        : printer.protocol === 'tspl'
+        ? buildLabel(sampleLabel)
         : buildReceipt(
             SAMPLE_ORDER as never,
             PAPER_COLUMNS[printer.paperWidthMm],
