@@ -537,3 +537,60 @@ it('printer nonaktif → failed dengan INVALID_CONFIG, tanpa membuka socket', as
   expect(repo.findById(job.id)?.lastError?.code).toBe('INVALID_CONFIG');
   expect(FakeTransport.sent).toHaveLength(0);
 });
+
+// Salinan merchant = struk pelanggan + header "MERCHANT". Header diturunkan
+// dari `destination` di dispatcher, bukan dikirim WebView — jadi dua printer
+// Bluetooth berdampingan bisa dipisah murni lewat konfigurasi tujuan.
+it('tujuan merchant_receipt mencetak struk yang sama plus header MERCHANT', async () => {
+  const { dispatcher } = setup(
+    printerConfig({ destinations: ['customer_receipt', 'merchant_receipt'] }),
+  );
+
+  dispatcher.submit({
+    orderId: 'ord-1',
+    destination: 'customer_receipt',
+    printerId: 'prn-1',
+    payload: order,
+  });
+  dispatcher.submit({
+    orderId: 'ord-1',
+    destination: 'merchant_receipt',
+    printerId: 'prn-1',
+    payload: order,
+  });
+
+  await flush();
+  await flush();
+
+  expect(FakeTransport.sent).toHaveLength(2);
+  const [customer, merchant] = FakeTransport.sent.map(bytes =>
+    new TextDecoder().decode(bytes),
+  );
+
+  expect(customer).not.toContain('MERCHANT');
+  // BOLD_ON + "MERCHANT" + BOLD_OFF, tepat sebelum blok info transaksi.
+  expect(merchant).toContain(`\x1bE\x01MERCHANT\x1bE\x00\n`);
+  // Isi lain identik: body merchant = body customer.
+  expect(merchant.replace(`\x1bE\x01MERCHANT\x1bE\x00\n`, '')).toBe(customer);
+});
+
+// Tanpa printer bertujuan merchant, job TETAP dicatat sebagai gagal
+// (NO_PRINTER) supaya muncul di Riwayat Cetak — bukan hilang diam-diam.
+it('tujuan merchant_receipt tanpa printer tetap tercatat di Riwayat Cetak', async () => {
+  const { db, repo, dispatcher } = setup(
+    printerConfig({ destinations: ['customer_receipt'] }),
+  );
+
+  const job = dispatcher.submitUnroutable({
+    orderId: 'ord-1',
+    destination: 'merchant_receipt',
+    payload: order,
+  });
+
+  await flush();
+
+  expect(db.count('print_jobs')).toBe(1);
+  expect(repo.findById(job.id)?.status).toBe('failed');
+  expect(repo.findById(job.id)?.lastError?.code).toBe('NO_PRINTER');
+});
+

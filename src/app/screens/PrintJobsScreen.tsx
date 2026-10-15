@@ -21,6 +21,7 @@ import {
 /** Nama tampilan destinasi untuk riwayat. */
 const DESTINATION_LABEL: Record<PrintDestination, string> = {
   customer_receipt: 'Struk Pelanggan',
+  merchant_receipt: 'Struk Merchant',
   kitchen_ticket: 'Tiket Dapur',
   label: 'Label Produk',
 };

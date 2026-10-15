@@ -180,6 +180,12 @@ export function PrinterFormScreen() {
               testID="dest-receipt"
             />
             <Toggle
+              label="Struk Merchant"
+              value={form.destinations.includes('merchant_receipt')}
+              onChange={() => toggleDestination('merchant_receipt')}
+              testID="dest-merchant"
+            />
+            <Toggle
               label="Tiket Dapur"
               value={form.destinations.includes('kitchen_ticket')}
               onChange={() => toggleDestination('kitchen_ticket')}

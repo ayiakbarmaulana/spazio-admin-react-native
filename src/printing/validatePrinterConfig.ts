@@ -70,7 +70,7 @@ export function validatePrinterConfig(input: ConfigInput): string[] {
     );
   }
   if (input.destinations.length === 0) {
-    errors.push('Pilih minimal satu tujuan cetak (struk atau tiket dapur).');
+    errors.push('Pilih minimal satu tujuan cetak.');
   }
 
   const uniqueDestinations = new Set<PrintDestination>(input.destinations);

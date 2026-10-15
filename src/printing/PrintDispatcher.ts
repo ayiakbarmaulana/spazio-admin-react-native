@@ -275,7 +275,14 @@ export class PrintDispatcher {
     if (!order.items || order.items.length === 0) {
       throw new Error('Order tidak punya item — tidak ada yang bisa dicetak.');
     }
-    return buildReceipt(order, columns);
+    // Salinan merchant = struk pelanggan + header. Header DITURUNKAN dari
+    // destination, bukan dari payload: WebView tidak boleh mengaku-ngaku
+    // destinasi, dan aturannya cukup di satu tempat.
+    return buildReceipt(
+      order,
+      columns,
+      job.destination === 'merchant_receipt' ? 'MERCHANT' : undefined,
+    );
   }
 
   /**

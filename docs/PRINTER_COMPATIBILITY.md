@@ -100,10 +100,10 @@ Skrip yang dihasilkan `buildLabel()` di `src/printing/ZplTemplate.ts`:
 ^LL160
 ^MNY
 ^PR4
-^FO0,y^A0N,22,22^FB240,1,0,C,0^FD<nama produk>^FS
-^FO0,y^A0N,18,18^FB240,1,0,C,0^FD<varian>^FS
-^FO4,y^A0N,14,14^FB240,3,0,C,0^FD<notes>^FS
-^FO4,y^A0N,14,14^FB240,1,0,C,0^FD<noreceipt>^FS
+^FO0,y^A0N,22,22^FB240,1,0,L,0^FD<nama produk>^FS
+^FO0,y^A0N,18,18^FB240,1,0,L,0^FD<varian>^FS
+^FO4,y^A0N,14,14^FB240,3,0,L,0^FD<notes>^FS
+^FO4,y^A0N,14,14^FB240,1,0,L,0^FD<noreceipt>^FS
 ^XZ
 ```
 
@@ -122,7 +122,7 @@ Skrip yang dihasilkan `buildLabel()` di `src/printing/ZplTemplate.ts`:
 | `^PR4` | Kecepatan cetak sedang |
 | `^FO x,y` | Titik awal field |
 | `^A0N,h,w` | Font scalable A0 (device-independent), tinggi & lebar dalam dots |
-| `^FB w,lines,,C,` | Blok teks: lebar, batas baris, perataan tengah (printer yang membungkus) |
+| `^FB w,lines,,L,` | Blok teks: lebar, batas baris, perataan kiri (printer yang membungkus). Sama seperti TSPL yang mulai dari x |
 | `^FD ... ^FS` | Isi field, lalu tutup |
 
 ### Checklist uji fisik (tidak bisa diverifikasi dari kode)

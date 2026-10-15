@@ -25,7 +25,12 @@ export function isLabelProtocol(protocol: PrinterProtocol): boolean {
   return LABEL_PROTOCOLS.includes(protocol);
 }
 
-export type PrintDestination = 'customer_receipt' | 'kitchen_ticket' | 'label';
+export type PrintDestination =
+  | 'customer_receipt'
+  /** Salinan untuk merchant/pedagang: isi identik struk pelanggan, header "MERCHANT". */
+  | 'merchant_receipt'
+  | 'kitchen_ticket'
+  | 'label';
 
 export type PaperWidthMm = 58 | 80;
 

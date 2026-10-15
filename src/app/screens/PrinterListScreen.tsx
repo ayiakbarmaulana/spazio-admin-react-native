@@ -24,6 +24,7 @@ import type { RootStackParamList } from '../navigation';
  *  salah terbaca sebagai tujuan lain. */
 const DESTINATION_LABEL: Record<PrintDestination, string> = {
   customer_receipt: 'Struk',
+  merchant_receipt: 'Struk Merchant',
   kitchen_ticket: 'Tiket Dapur',
   label: 'Label',
 };

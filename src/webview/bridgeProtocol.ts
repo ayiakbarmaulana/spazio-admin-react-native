@@ -34,7 +34,11 @@ export type BridgeResponse = {
 /** Payload PRINT_REQUEST — dari PWA, tanpa host/port (PRD §5.2). */
 export type PrintRequestPayload = {
   orderId: string;
-  destination: 'customer_receipt' | 'kitchen_ticket' | 'label';
+  destination:
+    | 'customer_receipt'
+    | 'merchant_receipt'
+    | 'kitchen_ticket'
+    | 'label';
   /**
    * Opsional. Kalau kosong, printer pertama yang aktif dan melayani tujuan itu
    * yang dipakai. Host/port sengaja TIDAK ada di sini.
@@ -145,6 +149,7 @@ export function validatePrintRequest(
   }
   if (
     p.destination !== 'customer_receipt' &&
+    p.destination !== 'merchant_receipt' &&
     p.destination !== 'kitchen_ticket' &&
     p.destination !== 'label'
   ) {

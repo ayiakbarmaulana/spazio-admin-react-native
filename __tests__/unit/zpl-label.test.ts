@@ -43,6 +43,17 @@ it('dimulai ^XA dan diakhiri ^XZ — tanpa ^XZ label tidak keluar', () => {
   expect(text).toMatch(/\^XZ\r?\n?$/);
 });
 
+// ── Perataan: rata kiri, sama seperti TSPL ─────────────────────────────────
+// Parameter ke-4 `^FB` = arah perataan. `L` rata kiri; `C` (tengah) pernah
+// dipakai dulu dan membuat teks melompat saat nama/varian panjangnya beda.
+it('teks rata kiri: setiap field memakai ^FB ... L', () => {
+  const blocks = script(BASE).match(/\^FB\d+,\d+,0,([A-Z]),0/g) ?? [];
+  expect(blocks.length).toBeGreaterThan(0);
+  for (const block of blocks) {
+    expect(block).toMatch(/,L,0$/);
+  }
+});
+
 it('memuat ukuran label: lebar cetak 30mm (240 dots) & feed 20mm (160 dots)', () => {
   const text = script(BASE);
   // Sumbu ZPL BP-TR110: X = sisi 30mm (melintang kepala cetak), Y = sisi 20mm.

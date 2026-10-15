@@ -90,9 +90,12 @@ function wrapText(value: string, limit: number): string[] {
 }
 
 /**
- * Field teks ZPL: `^FO` posisi, `^FB` blok terpusat dengan batas baris, lalu
- * `^FD` isi dan `^FS` penutup. `^FB` menangani wrapping & centering di printer,
+ * Field teks ZPL: `^FO` posisi, `^FB` blok rata kiri dengan batas baris, lalu
+ * `^FD` isi dan `^FS` penutup. `^FB` menangani wrapping & perataan di printer,
  * jadi tidak ada perhitungan X di sisi app.
+ *
+ * Parameter ke-4 `^FB` = perataan: `L` rata kiri (disamakan dengan TSPL, yang
+ * memang mulai dari x). Ganti ke `C` kalau label perlu teks terpusat lagi.
  */
 function field(
   x: number,
@@ -103,7 +106,7 @@ function field(
 ): string {
   return (
     `^FO${x},${y}^A0N,${font.height},${font.width}` +
-    `^FB${ZPL_PRINT_WIDTH_DOTS},${maxLines},0,C,0^FD${zplField(text)}^FS`
+    `^FB${ZPL_PRINT_WIDTH_DOTS},${maxLines},0,L,0^FD${zplField(text)}^FS`
   );
 }
 
