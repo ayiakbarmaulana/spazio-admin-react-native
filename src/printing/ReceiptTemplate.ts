@@ -29,6 +29,23 @@ import type { ReceiptOrder } from '../types/printing';
 const INFO_LABEL_WIDTH = 14;
 
 /**
+ * Lebar kolom baris item: qty kiri, nama tengah (sisa), subtotal kanan 11
+ * karakter. MIRROR konstanta QTY_W/SUBTOTAL_W di spazio-admin/lib/thermal-print.ts.
+ */
+const QTY_W = 4;
+const SUBTOTAL_W = 11;
+
+/** Ringkasan opsi: "Large, Extra Shot x2". MIRROR lib/order-item-label.ts. */
+function optionsSummary(
+  options?: { name: string; quantity: number }[] | null,
+): string {
+  if (!options || options.length === 0) return '';
+  return options
+    .map((o) => (o.quantity > 1 ? `${o.name} x${o.quantity}` : o.name))
+    .join(', ');
+}
+
+/**
  * Zona waktu kalender bisnis. Jakarta tanpa DST → offset tetap aman.
  * Sama dengan JAKARTA_TZ di spazio-admin/lib/jakarta-date.ts.
  */
@@ -223,21 +240,38 @@ export function buildReceipt(
     separator(columns),
     CMD.LF,
   );
-  for (const item of order.items) {
-    const qtyPrice = `${item.quantity} x ${rupiah(item.priceAtOrder)}`;
+  // Layout: `qty | nama | subtotal`, varian & catatan sebagai sub-baris indent
+  // 2 spasi. Baris kosong DIPASANG DI ANTARA item (bukan setelah item terakhir)
+  // supaya baris rincian tetap menempel ke item terakhir.
+  order.items.forEach((item, index) => {
+    if (index > 0) parts.push(CMD.LF); // napas antar item
+    const qty = `${item.quantity}`;
     const subtotal = rupiah(item.priceAtOrder * item.quantity);
-    for (const line of wrap(item.menuName, columns)) {
-      parts.push(padEnd(line, columns), CMD.LF);
+    const nameLines = wrap(item.menuName, columns - QTY_W - SUBTOTAL_W);
+    parts.push(
+      padEnd(qty, QTY_W),
+      padEnd(nameLines[0], columns - QTY_W - SUBTOTAL_W),
+      padStart(subtotal, SUBTOTAL_W),
+      CMD.LF,
+    );
+    // Nama panjang: baris lanjutan menjorok ke kolom nama (tidak mengulang qty).
+    for (const line of nameLines.slice(1)) {
+      parts.push(padEnd(' '.repeat(QTY_W) + line, columns), CMD.LF);
+    }
+    const variant = optionsSummary(item.options);
+    if (variant) {
+      for (const line of wrap(`- ${variant}`, columns - 2)) {
+        parts.push(padEnd(`  ${line}`, columns), CMD.LF);
+      }
     }
     // Catatan item mengekor item-nya. Item tanpa catatan tidak mencetak apa pun
     // (jangan sampai muncul baris "* null" yang bikin dapur bingung).
     if (item.note) {
-      for (const line of wrap(`  * ${item.note}`, columns)) {
-        parts.push(padEnd(line, columns), CMD.LF);
+      for (const line of wrap(`* ${item.note}`, columns - 2)) {
+        parts.push(padEnd(`  ${line}`, columns), CMD.LF);
       }
     }
-    parts.push(padEnd(qtyPrice, columns - 11), padStart(subtotal, 11), CMD.LF);
-  }
+  });
 
   parts.push(...buildDetailLines(order, columns));
 

@@ -19,7 +19,7 @@
  * dipakai di sini: build ini dibangun tanpa USB, jadi tidak ada server dev
  * yang terjangkau dari HP. Ganti nilai ini lalu rebuild kalau butuh dev.
  */
-export const DEFAULT_ORIGIN = 'https://spazio.melvapos.com';
+export const DEFAULT_ORIGIN = 'https://spazio-dev.melvapos.com';
 
 export type HealthResult = {
   ok: boolean;

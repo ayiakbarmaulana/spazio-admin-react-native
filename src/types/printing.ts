@@ -159,7 +159,13 @@ export type PrintJobError = {
 
 /** Baris item pada struk. Harga WAJIB datang dari kalkulasi otoritatif. */
 export type ReceiptItem = {
+  /** Nama menu polos. Varian dipisah ke `options`. */
   menuName: string;
+  /**
+   * Opsi terpilih, dicetak sebagai sub-baris indent "  - Large, Extra Shot x2"
+   * tepat di bawah nama menu. Diteruskan apa adanya dari WebView.
+   */
+  options?: { name: string; quantity: number }[] | null;
   quantity: number;
   priceAtOrder: number;
   note?: string | null;

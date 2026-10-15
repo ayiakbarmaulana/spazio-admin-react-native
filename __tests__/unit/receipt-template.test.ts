@@ -377,7 +377,14 @@ it('PASS 18: nominal besar tetap rata kanan dalam 11 kolom', () => {
   };
   const text = render(buildReceipt(bigAmount, W));
 
-  expect(text).toContain('Rp 12.345.678');
+  // Kolom TOTAL tetap 11 lebar: nominal > 11 karakter dipotong dari KIRI oleh
+  // padStart (bug lama, sama di web). Yang dijaga di sini: barisnya tidak
+  // melebar melewati struk dan angka terakhir tetap terbaca.
+  // Nominal > 11 karakter dipotong oleh padStart(11) — bug lama, sama di web.
+  // Yang dijaga: baris tidak melebar melewati struk dan digit terakhir terbaca.
+  const itemRow = lines(text).find(l => l.includes('Paket Katering')) as string;
+  expect(itemRow).toHaveLength(W);
+  expect(itemRow.endsWith('12.345.678')).toBe(true);
   expectWidth(text, W, 'nominal besar');
 });
 
@@ -406,5 +413,83 @@ it('PASS 20: noreceipt non-pola tidak mencetak blok antrian', () => {
   expect(text).not.toContain('Antrian');
   // guard agar regex nomor tidak pernah menganggap id pendek sebagai nomor
   expect(text).not.toContain('Antrian #1');
+});
+
+// ── 21. Layout item: qty | nama | subtotal, varian jadi sub-baris "  - " ───
+it('PASS 21: varian dan catatan jadi sub-baris indent di bawah nama menu', () => {
+  const order: ReceiptOrder = {
+    ...base,
+    items: [
+      {
+        menuName: 'Es Kopi Susu',
+        quantity: 1,
+        priceAtOrder: 25_000,
+        options: [
+          { name: 'Large', quantity: 1 },
+          { name: 'Extra Shot', quantity: 2 },
+        ],
+        note: 'tanpa gula',
+      },
+    ],
+  };
+  const rows = lines(render(buildReceipt(order, W)));
+
+  const item = rows.find(l => l.includes('Es Kopi Susu')) as string;
+  expect(item.startsWith('1   ')).toBe(true);
+  expect(item.endsWith('Rp 25.000')).toBe(true);
+  expect(item).toHaveLength(W);
+
+  const variant = rows.find(l => l.includes('Large, Extra Shot x2')) as string;
+  expect(variant.startsWith('  - ')).toBe(true);
+  expect(variant).toHaveLength(W);
+
+  const note = rows.find(l => l.includes('* tanpa gula')) as string;
+  expect(note.startsWith('  * ')).toBe(true);
+  expectWidth(rows.join('\n'), W, 'item bervarian');
+});
+
+// ── 22. Item tanpa opsi tidak meninggalkan baris varian liar ───────────────
+it('PASS 22: item tanpa opsi tidak mencetak baris "  - "', () => {
+  const order: ReceiptOrder = {
+    ...base,
+    items: [
+      { menuName: 'Teh', quantity: 2, priceAtOrder: 15_000 },
+      { menuName: 'Air Mineral', quantity: 1, priceAtOrder: 5_000, options: [] },
+    ],
+  };
+  const rows = lines(render(buildReceipt(order, W)));
+
+  expect(rows.some(l => /^\s*-\s/.test(l) && !/^-+$/.test(l))).toBe(false);
+  expect(rows.find(l => l.includes('Teh'))).toHaveLength(W);
+  expect(rows.find(l => l.includes('Air Mineral'))).toHaveLength(W);
+});
+
+// ── 23. Baris kosong hanya ANTAR item, bukan setelah item terakhir ─────────
+it('PASS 23: baris kosong antar item, separator tetap menempel item terakhir', () => {
+  const order: ReceiptOrder = {
+    ...base,
+    items: [
+      { menuName: 'Kopi Susu', quantity: 1, priceAtOrder: 25_000, options: [{ name: 'Hot', quantity: 1 }] },
+      { menuName: 'Teh', quantity: 1, priceAtOrder: 15_000 },
+      { menuName: 'Roti Bakar', quantity: 1, priceAtOrder: 10_000 },
+    ],
+  };
+  const rows = lines(render(buildReceipt(order, W)));
+
+  const firstItem = rows.findIndex(l => l.includes('Kopi Susu'));
+  const lastItem = rows.findIndex(l => l.includes('Roti Bakar'));
+  const detailSep = rows.findIndex((l, i) => i > lastItem && l === '-'.repeat(W));
+
+  // Dua baris kosong: antara item 1-2 dan 2-3.
+  const blanks = rows
+    .slice(firstItem, detailSep)
+    .filter(l => l.trim() === '').length;
+  expect(blanks).toBe(2);
+
+  // Tidak ada baris kosong antara item terakhir dan separator rincian —
+  // separo pertama sudah memastikan itu. Separator rincian tepat setelahnya.
+  expect(rows.slice(lastItem + 1, detailSep).filter(l => l.trim() === '')).toHaveLength(0);
+  expect(rows[detailSep]).toBe('-'.repeat(W));
+  expect(rows[detailSep]).not.toBe(rows[firstItem]);
 });
 

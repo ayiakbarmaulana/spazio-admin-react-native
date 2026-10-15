@@ -119,8 +119,7 @@ it('PASS 2: teks struk 32 kolom identik dengan fixture web', () => {
       '--------------------------------',
       'ITEM',
       '--------------------------------',
-      'Kopi Susu',
-      '2 x Rp 25.000          Rp 50.000',
+      '2   Kopi Susu          Rp 50.000',
       '--------------------------------',
       'Subtotal               Rp 50.000',
       'Pajak PPN               Rp 5.500',
@@ -140,12 +139,55 @@ it('PASS 2: teks struk 32 kolom identik dengan fixture web', () => {
 
 it('PASS 3: tidak ada baris kosong sebelum separator blok rincian', () => {
   const lines = commandsOf(buildReceipt(order, W, 'INVOICE')).split('\n');
-  const itemRow = lines.indexOf('2 x Rp 25.000          Rp 50.000');
+  const itemRow = lines.indexOf('2   Kopi Susu          Rp 50.000');
   expect(itemRow).toBeGreaterThan(-1);
   // Web menempelkan separator langsung setelah baris item terakhir
-  // (thermal-print.ts:512). Satu CMD.LF ekstra = regresi.
+  // (lib/thermal-print.ts buildReceipt) — baris kosong hanya dipasang DI ANTARA
+  // item. Satu CMD.LF ekstra di sini = regresi.
   expect(lines[itemRow + 1]).toBe('-'.repeat(W));
   expect(lines[itemRow + 2]).toBe('Subtotal               Rp 50.000');
+});
+
+it('PASS 3b: layout varian & nama panjang identik dengan fixture web', () => {
+  // Golden di bawah dirender web asli dengan order bervarian (perintah sama
+  // seperti header, `items` diganti tiga baris: satu beropsi+catatan, satu nama
+  // panjang, satu polos). Menjaga layout qty|nama|subtotal tetap byte-identik.
+  const withVariants: ReceiptOrder = {
+    ...order,
+    items: [
+      { menuName: 'Kopi Susu', quantity: 2, priceAtOrder: 25_000 },
+      {
+        menuName: 'Es Kopi Susu',
+        quantity: 1,
+        priceAtOrder: 25_000,
+        options: [
+          { name: 'Large', quantity: 1 },
+          { name: 'Extra Shot', quantity: 2 },
+        ],
+        note: 'tanpa gula',
+      },
+      {
+        menuName: 'Nasi Goreng Spesial Extra Pedas Sekali Ya',
+        quantity: 1,
+        priceAtOrder: 25_000,
+      },
+    ],
+  };
+  const rows = commandsOf(buildReceipt(withVariants, W, 'INVOICE')).split('\n');
+  const itemStart = rows.indexOf('2   Kopi Susu          Rp 50.000');
+  expect(itemStart).toBeGreaterThan(-1);
+  expect(rows.slice(itemStart, itemStart + 10)).toEqual([
+    '2   Kopi Susu          Rp 50.000',
+    '',
+    '1   Es Kopi Susu       Rp 25.000',
+    '  - Large, Extra Shot x2',
+    '  * tanpa gula',
+    '',
+    '1   Nasi Goreng        Rp 25.000',
+    '    Spesial Extra',
+    '    Pedas Sekali Ya',
+    '--------------------------------',
+  ]);
 });
 
 it('PASS 4: order lunas penuh tidak mencetak SISA TAGIHAN', () => {

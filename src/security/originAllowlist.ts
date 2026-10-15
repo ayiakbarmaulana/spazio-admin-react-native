@@ -24,7 +24,7 @@
  * biasa — flag env gampang lupa dimatikan.
  */
 const DEV_ORIGINS: readonly string[] = __DEV__
-  ? ['http://localhost:3000', 'http://10.0.2.2:3000']
+  ? ['http://localhost:3000', 'http://10.0.2.2:3000', 'https://spazio-dev.melvapos.com']
   : [];
 
 export const ALLOWED_ORIGINS: readonly string[] = [
