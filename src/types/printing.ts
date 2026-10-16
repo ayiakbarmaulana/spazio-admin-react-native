@@ -225,6 +225,12 @@ export type KitchenTicketOrder = {
   items: {
     menuName: string;
     quantity: number;
+    /**
+     * Varian terpilih (mis. "Large", "Extra Shot"), dicetak sebagai sub-baris
+     * indent di bawah nama menu — sama seperti struk pelanggan. Kosong = tidak
+     * dicetak. Harga tetap TIDAK ada di sini.
+     */
+    options?: { name: string; quantity: number }[] | null;
     note?: string | null;
     /** Terisi = baris tambahan yang masuk setelah tiket awal. */
     addedAt?: string | null;

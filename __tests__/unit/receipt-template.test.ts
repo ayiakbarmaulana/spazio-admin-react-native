@@ -416,6 +416,7 @@ it('PASS 20: noreceipt non-pola tidak mencetak blok antrian', () => {
 });
 
 // ── 21. Layout item: qty | nama | subtotal, varian jadi sub-baris "  - " ───
+//      (blok item TANPA baris kosong antar item — lihat PASS 23) ─────────────
 it('PASS 21: varian dan catatan jadi sub-baris indent di bawah nama menu', () => {
   const order: ReceiptOrder = {
     ...base,
@@ -464,8 +465,8 @@ it('PASS 22: item tanpa opsi tidak mencetak baris "  - "', () => {
   expect(rows.find(l => l.includes('Air Mineral'))).toHaveLength(W);
 });
 
-// ── 23. Baris kosong hanya ANTAR item, bukan setelah item terakhir ─────────
-it('PASS 23: baris kosong antar item, separator tetap menempel item terakhir', () => {
+// ── 23. Tidak ada baris kosong di blok item ─────────────────────────────────
+it('PASS 23: tanpa baris kosong antar item, separator menempel item terakhir', () => {
   const order: ReceiptOrder = {
     ...base,
     items: [
@@ -480,16 +481,14 @@ it('PASS 23: baris kosong antar item, separator tetap menempel item terakhir', (
   const lastItem = rows.findIndex(l => l.includes('Roti Bakar'));
   const detailSep = rows.findIndex((l, i) => i > lastItem && l === '-'.repeat(W));
 
-  // Dua baris kosong: antara item 1-2 dan 2-3.
+  // Nol baris kosong: sub-baris varian/catatan sudah memberi jarak visual.
   const blanks = rows
     .slice(firstItem, detailSep)
     .filter(l => l.trim() === '').length;
-  expect(blanks).toBe(2);
+  expect(blanks).toBe(0);
 
-  // Tidak ada baris kosong antara item terakhir dan separator rincian —
-  // separo pertama sudah memastikan itu. Separator rincian tepat setelahnya.
-  expect(rows.slice(lastItem + 1, detailSep).filter(l => l.trim() === '')).toHaveLength(0);
+  // Item terakhir (dan sub-barisnya) menempel langsung ke separator rincian.
   expect(rows[detailSep]).toBe('-'.repeat(W));
-  expect(rows[detailSep]).not.toBe(rows[firstItem]);
+  expect(rows.slice(lastItem + 1, detailSep).filter(l => l.trim() === '')).toHaveLength(0);
 });
 

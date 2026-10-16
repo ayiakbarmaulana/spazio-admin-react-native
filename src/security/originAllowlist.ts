@@ -5,6 +5,8 @@
 // kasir. Kalau navigasi ke origin lain dibiarkan, halaman asing bisa memanggil
 // bridge cetak DAN membaca apa pun yang bisa diakses cookie itu.
 
+import { DEV_ORIGIN } from '../networking/ApiClient';
+
 /**
  * Origin dev yang HANYA aktif di build debug.
  *
@@ -24,17 +26,19 @@
  * biasa — flag env gampang lupa dimatikan.
  */
 const DEV_ORIGINS: readonly string[] = __DEV__
-  ? ['http://localhost:3000', 'http://10.0.2.2:3000', 'https://spazio-dev.melvapos.com']
+  ? ['http://localhost:3000', 'http://10.0.2.2:3000', DEV_ORIGIN]
   : [];
 
 export const ALLOWED_ORIGINS: readonly string[] = [
   'https://spazio.melvapos.com',
+  'https://spazio-dev.melvapos.com',
   ...DEV_ORIGINS,
 ];
 
 /** Origin yang boleh dibuka di dalam app tapi TIDAK boleh menyentuh bridge. */
 export const TRUSTED_NAVIGATION_ORIGINS: readonly string[] = [
   'https://spazio.melvapos.com',
+  'https://spazio-dev.melvapos.com',
   'https://accounts.google.com',
   ...DEV_ORIGINS,
 ];

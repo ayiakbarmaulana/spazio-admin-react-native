@@ -82,9 +82,24 @@ export function buildKitchenTicket(
     for (const line of wrap(prefix + item.menuName, columns)) {
       parts.push(CMD.BOLD_ON, padEnd(line, columns), CMD.BOLD_OFF, CMD.LF);
     }
+    if (item.options && item.options.length > 0) {
+      // Varian sejajar dengan catatan di bawahnya ("   >> ") — dapur membaca
+      // "3x NASI GORENG" dulu, lalu varian, lalu catatan. TANPA bold: nama menu
+      // yang harus paling menonjol, bukan pilihannya.
+      //
+      // Indent DIPASANG SETELAH `wrap`, bukan di dalam string: `wrap` memotong
+      // kata yang lebih panjang dari kolom dari indeks 0, jadi spasi indent di
+      // dalam string akan hilang di baris pertama.
+      const variant = item.options
+        .map(o => (o.quantity > 1 ? `${o.name} x${o.quantity}` : o.name))
+        .join(', ');
+      for (const line of wrap(`- ${variant}`, columns - 3)) {
+        parts.push(padEnd(`   ${line}`, columns), CMD.LF);
+      }
+    }
     if (item.note) {
-      for (const line of wrap(`   >> ${item.note}`, columns)) {
-        parts.push(padEnd(line, columns), CMD.LF);
+      for (const line of wrap(`>> ${item.note}`, columns - 3)) {
+        parts.push(padEnd(`   ${line}`, columns), CMD.LF);
       }
     }
     // Penanda tambahan: dapur perlu tahu mana yang baru masuk menyusul.

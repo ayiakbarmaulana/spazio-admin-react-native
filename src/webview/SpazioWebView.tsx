@@ -33,6 +33,7 @@ import {
 import { Colors, FontSize, Radius, Spacing } from '../app/theme';
 import {
   DEFAULT_ORIGIN,
+  DEV_ORIGIN,
 } from '../networking/ApiClient';
 import {
   ALLOWED_ORIGINS,
@@ -106,7 +107,10 @@ true;
 
 export function SpazioWebView({
   handler,
-  origin = DEFAULT_ORIGIN,
+  // Dev memakai server `spazio-dev`; rilis memakai PWA produksi. Dua-duanya
+  // ada di `TRUSTED_NAVIGATION_ORIGINS` pada build yang sesuai, jadi tidak
+  // ada halaman app sendiri yang salah dilempar ke browser.
+  origin = __DEV__ ? DEV_ORIGIN : DEFAULT_ORIGIN,
   onBridgeError,
 }: Props) {
   const webViewRef = useRef<React.ElementRef<typeof WebView>>(null);

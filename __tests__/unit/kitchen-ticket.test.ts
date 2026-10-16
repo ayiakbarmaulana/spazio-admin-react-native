@@ -147,6 +147,38 @@ it('nama menu panjang dibungkus, bukan dipotong', () => {
   expectWidth(text, W, 'nama panjang');
 });
 
+it('varian tercetak sebagai sub-baris tepat di bawah nama menu', () => {
+  const order: KitchenTicketOrder = {
+    ...base,
+    tableNumber: null,
+    customerName: null,
+    note: null,
+    items: [
+      {
+        menuName: 'Es Kopi Susu',
+        quantity: 1,
+        options: [
+          { name: 'Large', quantity: 1 },
+          { name: 'Extra Shot', quantity: 2 },
+        ],
+        note: 'tanpa gula',
+      },
+      { menuName: 'Teh', quantity: 1 },
+    ],
+  };
+  const rows = lines(render(buildKitchenTicket(order, W))).map(l => l.replace(/\s+$/, ''));
+
+  // Nama dulu, varian mengekor di bawahnya, lalu catatan.
+  const nameRow = rows.indexOf('1x Es Kopi Susu');
+  expect(nameRow).toBeGreaterThan(-1);
+  expect(rows[nameRow + 1]).toBe('   - Large, Extra Shot x2');
+  expect(rows[nameRow + 2]).toBe('   >> tanpa gula');
+
+  // Item tanpa opsi tidak dapat baris varian liar.
+  expect(rows.some(l => /^\s*-\s/.test(l) && !/^-+$/.test(l) && !l.includes('Large'))).toBe(false);
+  expectWidth(rows.join('\n'), W, 'tiket bervarian');
+});
+
 it('label salinan dapur tercetak kalau diberikan', () => {
   const text = render(buildKitchenTicket(base, W, 'BAR'));
 

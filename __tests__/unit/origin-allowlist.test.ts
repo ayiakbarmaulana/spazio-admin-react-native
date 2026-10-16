@@ -10,7 +10,7 @@ import {
   isExternalLink,
   TRUSTED_NAVIGATION_ORIGINS,
 } from '../../src/security/originAllowlist';
-import { DEFAULT_ORIGIN } from '../../src/networking/ApiClient';
+import { DEFAULT_ORIGIN, DEV_ORIGIN } from '../../src/networking/ApiClient';
 
 it('DEFAULT_ORIGIN yang dimuat WebView memang boleh dimuat', () => {
   // Pernah kejadian: DEFAULT_ORIGIN diubah ke IP LAN, tapi allowlist tidak.
@@ -18,6 +18,19 @@ it('DEFAULT_ORIGIN yang dimuat WebView memang boleh dimuat', () => {
   // pun. Test ini mengikat kedua sumber itu supaya tidak bisa berbeda lagi.
   expect(ALLOWED_ORIGINS).toContain(DEFAULT_ORIGIN);
   expect(isAllowedNavigation(`${DEFAULT_ORIGIN}/pos`)).toBe(true);
+});
+
+it('origin yang benar-benar dimuat WebView tidak pernah dilempar ke browser', () => {
+  // Regresi nyata: DEFAULT_ORIGIN diset ke `spazio-dev.melvapos.com` (origin
+  // yang cuma ada di allowlist build debug). Di APK rilis WebView menolak
+  // halaman itu, lalu `handleNavigation` menganggapnya tautan luar dan membuka
+  // Chrome. Origin harus dihitung sama persis seperti di SpazioWebView.tsx.
+  const webViewOrigin = __DEV__ ? DEV_ORIGIN : DEFAULT_ORIGIN;
+
+  expect(ALLOWED_ORIGINS).toContain(webViewOrigin);
+  expect(TRUSTED_NAVIGATION_ORIGINS).toContain(webViewOrigin);
+  expect(isAllowedNavigation(`${webViewOrigin}/pos`)).toBe(true);
+  expect(isExternalLink(webViewOrigin)).toBe(false);
 });
 
 it('origin PWA boleh memanggil bridge', () => {

@@ -142,8 +142,8 @@ it('PASS 3: tidak ada baris kosong sebelum separator blok rincian', () => {
   const itemRow = lines.indexOf('2   Kopi Susu          Rp 50.000');
   expect(itemRow).toBeGreaterThan(-1);
   // Web menempelkan separator langsung setelah baris item terakhir
-  // (lib/thermal-print.ts buildReceipt) — baris kosong hanya dipasang DI ANTARA
-  // item. Satu CMD.LF ekstra di sini = regresi.
+  // (lib/thermal-print.ts buildReceipt) — blok item TIDAK punya baris kosong
+  // sama sekali sekarang. Satu CMD.LF ekstra di sini = regresi.
   expect(lines[itemRow + 1]).toBe('-'.repeat(W));
   expect(lines[itemRow + 2]).toBe('Subtotal               Rp 50.000');
 });
@@ -178,15 +178,15 @@ it('PASS 3b: layout varian & nama panjang identik dengan fixture web', () => {
   expect(itemStart).toBeGreaterThan(-1);
   expect(rows.slice(itemStart, itemStart + 10)).toEqual([
     '2   Kopi Susu          Rp 50.000',
-    '',
     '1   Es Kopi Susu       Rp 25.000',
     '  - Large, Extra Shot x2',
     '  * tanpa gula',
-    '',
     '1   Nasi Goreng        Rp 25.000',
     '    Spesial Extra',
     '    Pedas Sekali Ya',
     '--------------------------------',
+    'Subtotal               Rp 50.000',
+    'Pajak PPN               Rp 5.500',
   ]);
 });
 

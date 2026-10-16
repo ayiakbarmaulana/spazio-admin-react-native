@@ -19,7 +19,19 @@
  * dipakai di sini: build ini dibangun tanpa USB, jadi tidak ada server dev
  * yang terjangkau dari HP. Ganti nilai ini lalu rebuild kalau butuh dev.
  */
-export const DEFAULT_ORIGIN = 'https://spazio-dev.melvapos.com';
+export const DEFAULT_ORIGIN = 'https://spazio.melvapos.com';
+
+/**
+ * Origin yang dibuka WebView saat `__DEV__` (server dev di `spazio-dev`).
+ *
+ * SENGAJA dipisah dari `DEFAULT_ORIGIN`: kalau dev origin ditaruh di
+ * `DEFAULT_ORIGIN`, APK rilis yang dibundel Metro akan memuatnya juga — dan
+ * karena `spazio-dev` tidak ada di `ALLOWED_ORIGINS` versi rilis, WebView
+ * menolak halaman itu dan `handleNavigation` melemparnya ke browser.
+ * Dipisah begini, dev origin hanya ada di build debug (sama seperti
+ * `DEV_ORIGINS` di src/security/originAllowlist.ts).
+ */
+export const DEV_ORIGIN = 'https://spazio-dev.melvapos.com';
 
 export type HealthResult = {
   ok: boolean;

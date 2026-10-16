@@ -241,10 +241,9 @@ export function buildReceipt(
     CMD.LF,
   );
   // Layout: `qty | nama | subtotal`, varian & catatan sebagai sub-baris indent
-  // 2 spasi. Baris kosong DIPASANG DI ANTARA item (bukan setelah item terakhir)
-  // supaya baris rincian tetap menempel ke item terakhir.
-  order.items.forEach((item, index) => {
-    if (index > 0) parts.push(CMD.LF); // napas antar item
+  // 2 spasi persis di bawah nama menu. TANPA baris kosong antar item — sama
+  // dengan web (lib/thermal-print.ts), byte harus identik (escpos-fixture).
+  order.items.forEach((item) => {
     const qty = `${item.quantity}`;
     const subtotal = rupiah(item.priceAtOrder * item.quantity);
     const nameLines = wrap(item.menuName, columns - QTY_W - SUBTOTAL_W);
